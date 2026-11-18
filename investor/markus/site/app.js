@@ -57,15 +57,16 @@
   const ckStock = sum(FA.filter(isCK), (o) => o.stock ?? 0) / stockAll;
   const ckValue = sum(FA.filter(isCK), value) / valueAll;
 
-  const tile = (l, v, r = '') => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div>${r ? `<div class="r">${r}</div>` : ''}</div>`;
-  const bjr = (v) => `<span class="retail-only">Ben's Jungle: ${v}</span>`;
+  // Ben's Jungle (retail switch): its figure sits under FlorAccess's in the same size, dark green, with a small note below.
+  const tile = (l, v, r = '') => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div>${r}</div>`;
+  const bjr = (v, note = "Ben's Jungle") => `<div class="retail-only bj"><div class="v">${v}</div><div class="r">${note}</div></div>`;
   $('tiles').innerHTML =
     tile('Medianpreis', eur(median(FA.map((o) => o.net))) + '<small style="font-size:12px;font-weight:400"> netto</small>',
-      bjr(`${eur(median(BJ.map((o) => o.price)))} inkl. MwSt.`)) +
+      bjr(eur(median(BJ.map((o) => o.price))), "Ben's Jungle, inkl. MwSt.")) +
     tile('Arten', species(FA), bjr(species(BJ))) +
     tile('Angebote', FA.length, bjr(BJ.length)) +
-    tile('Pflanzen im Bestand', nf0.format(stockAll), bjr('nicht veröffentlicht')) +
-    tile('Lagerwert (netto)', eur0(valueAll), bjr('–'));
+    tile('Pflanzen im Bestand', nf0.format(stockAll), bjr('–', "Ben's Jungle: nicht veröffentlicht")) +
+    tile('Warenwert zu Verkaufspreisen', eur0(valueAll), bjr('–', "Ben's Jungle: nicht veröffentlicht"));
 
   // ---------- donuts ----------
   const charts = {};
@@ -115,7 +116,6 @@
           type: 'group',
           onmouseover: () => chart.dispatchAction({ type: 'showTip', seriesIndex: 1, dataIndex: ar.index }),
           onmouseout: () => chart.dispatchAction({ type: 'hideTip' }),
-          onclick: () => showGroup(inner[ar.index].gid),
           children: [
             { type: 'line', shape: { x1: tail[0], y1: tail[1], x2: tip[0], y2: tip[1] }, style: { stroke: ink, lineWidth: 1.5 } },
             { type: 'polygon', shape: { points: [tip, left, right] }, style: { fill: ink } },
@@ -146,7 +146,6 @@
         ],
       }, true);
     };
-    chart.on('click', (p) => p.data?.gid != null && showGroup(p.data.gid));
     new ResizeObserver(() => { chart.resize(); draw(); }).observe(el);
     draw();
     return { chart, draw };
@@ -199,7 +198,6 @@
           itemStyle: { borderColor: '#fff', borderWidth: 1.5, borderRadius: 2 }, emphasis: { scale: false }, data }],
       }, true);
     };
-    chart.on('click', (p) => p.data?.gid != null && showGroup(p.data.gid));
     new ResizeObserver(() => { chart.resize(); draw(); }).observe(el);
     draw();
     return { chart, draw };
@@ -252,41 +250,13 @@
   const share = (id, f) => sum(FA.filter((o) => topOf(o) === id), f);
   $('caption').textContent = `Kerrii-artige sind ${pct(share(kerriiId, (o) => o.stock ?? 0) / stockAll)} der Pflanzen, aber nur ${pct(share(kerriiId, value) / valueAll)} des Lagerwerts – überwiegend günstige Einzelblätter.`;
 
-  // ---------- legend and group lists ----------
+  // ---------- legend ----------
   function legend() {
     const items = tops.flatMap((id) => [id, ...subsOf(id).map((s) => s.id)]);
     $('legend').innerHTML = items.map((id) => {
       const g = groups[id];
-      return `<button data-g="${id}" class="${selected == id ? 'on' : ''}"><span class="sw${g.parent ? ' hollow' : ''}" style="${g.parent ? `border-color:${g.color}` : `background:${g.color}`}"></span>${esc(g.parent ? '└ ' + g.name : g.name)}</button>`;
+      return `<span class="chip"><span class="sw${g.parent ? ' hollow' : ''}" style="${g.parent ? `border-color:${g.color}` : `background:${g.color}`}"></span>${esc(g.parent ? '└ ' + g.name : g.name)}</span>`;
     }).join('');
-    for (const b of $('legend').querySelectorAll('button')) b.onclick = () => showGroup(b.dataset.g === 'other' ? 'other' : Number(b.dataset.g));
-  }
-
-  function showGroup(id) {
-    selected = selected == id ? null : id;
-    Object.values(charts).forEach((c) => c.draw());
-    legend();
-    const box = $('grouplist');
-    if (selected == null) { box.hidden = true; return; }
-    const g = groups[selected];
-    const fa = FA.filter((o) => inGroup(o, selected)).sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0));
-    const bj = BJ.filter((o) => inGroup(o, selected)).sort((a, b) => a.price - b.price);
-    box.hidden = false;
-    box.innerHTML = `
-      <div class="gl-head"><h3>${esc(g.long)}: ${fa.length} Angebote bei FlorAccess, ${nf0.format(sum(fa, (o) => o.stock ?? 0))} Pflanzen, ${eur0(sum(fa, value))}</h3>
-        <button onclick="this.closest('.grouplist').hidden = true">Schließen</button></div>
-      <div class="scroll"><table>
-        <tr><th>Angebot</th><th>Art / Sorte</th><th>Topf / Höhe</th><th class="n">Preis netto</th><th class="n">Bestand</th><th class="n">Lagerwert</th></tr>
-        ${fa.map((o) => `<tr><td>${esc(o.name)}</td><td><em>${esc(o.plant)}</em></td><td>${esc(o.pot ?? '')} / ${esc(o.height ?? '')}</td>
-          <td class="n">${eur(o.net)}</td><td class="n">${o.stock != null ? nf0.format(o.stock) : '–'}</td><td class="n">${eur0(value(o))}</td></tr>`).join('')}
-      </table></div>
-      <div class="retail-only" style="margin-top:8px">
-        <h3>Ben's Jungle: ${bj.length} Angebote</h3>
-        <div class="scroll"><table>
-          <tr><th>Angebot</th><th>Art / Sorte</th><th>Größe</th><th class="n">Preis inkl. MwSt.</th></tr>
-          ${bj.map((o) => `<tr><td>${esc(o.name)}</td><td><em>${esc(o.plant)}</em></td><td>${o.size !== 'unknown' ? esc(o.size) : ''}</td><td class="n">${eur(o.price)}</td></tr>`).join('')}
-        </table></div>
-      </div>`;
   }
   legend();
 

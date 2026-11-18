@@ -35,6 +35,8 @@ h3 { font-size: 14px; margin: 0 0 4px; }
 .tile .l { font-size: 12px; color: var(--muted); }
 .tile .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .tile .r { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tile .bj { margin-top: 6px; padding-top: 4px; border-top: 1.5px solid var(--line); }
+.tile .bj .v { color: #1f5a35; }
 @media (max-width: 700px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 
 .figure { border: 1.5px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
@@ -59,9 +61,8 @@ body.retail .flow .chart { height: 210px; }
 .dtitle { text-align: center; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .chart { height: 230px; }
 .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; margin-top: 2px; }
-.legend button { font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px;
-  border: 1.5px solid var(--line); border-radius: 999px; background: var(--paper); cursor: pointer; }
-.legend button.on { border-color: var(--ink-2); background: var(--soft); font-weight: 600; }
+.legend .chip { font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px;
+  border: 1.5px solid var(--line); border-radius: 999px; background: var(--paper); }
 .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .sw.hollow { background: transparent !important; border: 3px solid; }
 .caption { font-size: 13px; color: var(--ink-2); text-align: center; margin: 6px 0 0; }
