@@ -102,6 +102,10 @@
               {#each g.groups as x (x.id)}
                 <label><input type="checkbox" checked={filters.groups.includes(x.id)}
                   onchange={() => (filters.groups = toggle(filters.groups, x.id))} /> {x.label}</label>
+                {#each (g.subgroups ?? []).filter((y) => y.parent_id === x.id) as y (y.id)}
+                  <label class="subopt"><input type="checkbox" checked={filters.groups.includes(y.id)}
+                    onchange={() => (filters.groups = toggle(filters.groups, y.id))} /> └ {y.label}</label>
+                {/each}
               {/each}
             {/each}
             <a class="pop-link" href="#/groupings">Edit groupings</a>
@@ -233,6 +237,7 @@
   .pop.wide { min-width: 240px; }
   .pop label { display: flex; gap: 8px; align-items: center; font-size: 14px; white-space: nowrap; cursor: pointer; }
   .pop input { width: auto; }
+  .pop label.subopt { padding-left: 18px; }
   .pop-head { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 6px; }
   .pop-head:first-child { margin-top: 0; }
   .pop-link { margin-top: 8px; font-size: 13px; color: var(--accent); }

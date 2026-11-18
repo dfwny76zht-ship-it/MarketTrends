@@ -45,7 +45,7 @@ export function resetFilters() {
 }
 
 /** Overview chart panel. */
-export const chartPanel = $state(load('mt-chartpanel', { type: 'pie', by: '', measure: 'offers', split: false }));
+export const chartPanel = $state(load('mt-chartpanel', { type: 'pie', by: '', measure: 'offers', split: false, sub: true }));
 persist('mt-chartpanel', chartPanel);
 
 /** Shops and groupings, loaded once and refreshed after edits. */
@@ -59,7 +59,7 @@ export function loadMeta(force = false) {
         meta.shops = shops;
         meta.groupings = groupings;
         meta.loaded = true;
-        const known = new Set(groupings.flatMap((g) => g.groups.map((x) => x.id)));
+        const known = new Set(groupings.flatMap((g) => [...g.groups, ...(g.subgroups ?? [])].map((x) => x.id)));
         filters.groups = filters.groups.filter((id) => known.has(id));
       })
       .catch(() => {
@@ -71,7 +71,7 @@ export function loadMeta(force = false) {
 
 export function setGroupings(list) {
   meta.groupings = list;
-  const known = new Set(list.flatMap((g) => g.groups.map((x) => x.id)));
+  const known = new Set(list.flatMap((g) => [...g.groups, ...(g.subgroups ?? [])].map((x) => x.id)));
   filters.groups = filters.groups.filter((id) => known.has(id));
 }
 

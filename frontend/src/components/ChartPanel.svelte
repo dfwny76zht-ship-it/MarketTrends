@@ -83,6 +83,7 @@
       measure: chartPanel.measure,
       mode: chartPanel.type === 'time' ? 'series' : 'snapshot',
       split: chartPanel.split ? 1 : '',
+      sub: chartPanel.sub && grouping?.subgroups?.length ? 1 : '',
     });
   });
 
@@ -247,7 +248,12 @@
     </div>
     <div class="block">
       <span class="block-label">Layout</span>
-      <label class="switch"><input type="checkbox" bind:checked={chartPanel.split} /> One chart per shop</label>
+      <div class="switches">
+        <label class="switch"><input type="checkbox" bind:checked={chartPanel.split} /> One chart per shop</label>
+        {#if grouping?.subgroups?.length}
+          <label class="switch"><input type="checkbox" bind:checked={chartPanel.sub} /> Show subgroups</label>
+        {/if}
+      </div>
     </div>
     <div class="links">
       {#if grouping?.kind === 'price'}
@@ -330,6 +336,7 @@
   .pick { width: auto; padding: 5px 10px; font-size: 14px; background: var(--surface-2); }
   .switch { display: flex; gap: 8px; align-items: center; font-size: 14px; padding: 5px 0; cursor: pointer; white-space: nowrap; }
   .switch input { width: auto; }
+  .switches { display: flex; gap: 14px; flex-wrap: wrap; }
   .links { margin-left: auto; display: flex; gap: 6px; align-items: center; padding-bottom: 2px; }
   .link { font-size: 13px; color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 4px 10px; background: var(--surface); text-decoration: none; }
