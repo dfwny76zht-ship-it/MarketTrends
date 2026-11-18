@@ -147,7 +147,8 @@
       <tbody>
         {#each visible as r (r.key)}
           <tr>
-            <td><a href="#/taxon/{r.key}"><em>{r.name}</em></a></td>
+            <td><a class="name" href="#/taxon/{r.key}">{#if r.photo}<img src="/api/images/{r.photo}" alt="" loading="lazy" />{:else}<span
+              class="noimg"></span>{/if}<em>{r.name}</em></a></td>
             <td class="num">{r.shops}</td>
             <td class="num">{r.in_stock_shops}</td>
             <td class="num" title="median across shops, net, last day {r.last_day}">{fmtEur(r.price)}</td>
@@ -175,4 +176,6 @@
   .table-head input { max-width: 240px; }
   .table-head .muted { flex: 1; font-size: 13px; }
   .actions { white-space: nowrap; text-align: right; }
+  .name { display: inline-flex; align-items: center; gap: 10px; }
+  .name img, .noimg { width: 36px; height: 36px; flex: none; object-fit: cover; border-radius: 6px; background: var(--surface-2); }
 </style>

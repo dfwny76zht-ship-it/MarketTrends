@@ -7,3 +7,4 @@ httpx==0.28.1
 APScheduler==3.11.0
 tzdata==2024.2
 selectolax==0.3.27
+Pillow==11.0.0

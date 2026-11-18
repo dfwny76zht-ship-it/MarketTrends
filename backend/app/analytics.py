@@ -155,6 +155,15 @@ def taxa(days: int = 28, level: str = "species", shops: list[int] | None = Query
             ("s" + str(r["species_id"])) if r["species_id"] else ("c" + str(r["cultivar_id"]))
             for r in conn.execute("SELECT species_id, cultivar_id FROM watchlist")
         }
+        photos = {
+            r["key"]: r["id"]
+            for r in conn.execute(
+                f"SELECT DISTINCT ON (1) {key} AS key, l.id FROM listings l JOIN images i ON i.listing_id = l.id"
+                " AND i.status = 'ok' JOIN assignments a ON a.listing_id = l.id AND a.confirmed AND NOT a.ignored"
+                " LEFT JOIN cultivars c ON c.id = a.cultivar_id"
+                " ORDER BY 1, l.gone_since IS NULL DESC, l.last_seen DESC"
+            )
+        }
     out: dict[str, dict] = {}
     for r in rows:
         t = out.setdefault(r["key"], {"key": r["key"], "name": r["name"], "series": []})
@@ -172,7 +181,7 @@ def taxa(days: int = 28, level: str = "species", shops: list[int] | None = Query
             price=last["price"], shops=last["shops"], offers=last["offers"], quantity=last["quantity"],
             in_stock_shops=last["in_stock_shops"], last_day=last["day"], events=dict(events.get(t["key"], {})),
             events_daily=dict(events_daily.get(t["key"], {})),
-            watched=t["key"] in watched,
+            watched=t["key"] in watched, photo=photos.get(t["key"]),
         )
         t["event_total"] = sum(t["events"].values())
         result.append(t)
@@ -234,6 +243,7 @@ def taxon(key: str, days: int = 0, shops: list[int] | None = Query(None), size: 
         ).fetchall()
         offers = conn.execute(
             "SELECT l.id, l.name, l.url, l.gone_since, sh.name AS shop, o.price, o.currency, o.price_basis,"
+            " EXISTS (SELECT 1 FROM images i WHERE i.listing_id = l.id AND i.status = 'ok') AS photo,"
             " o.price_eur_net, o.availability, o.quantity, o.size_class, o.pot_size, o.observed_at, o.source"
             f" {BASE} AND {where} AND o.id IN (SELECT DISTINCT ON (listing_id) id FROM observations"
             f"   ORDER BY listing_id, observed_at DESC) {nf}"

@@ -5,6 +5,7 @@
 
 set-user creates the account or replaces its password (and logs out its sessions).
 reparse <run_id> parses an earlier run's stored pages again, without contacting the shop.
+images copies new offer photos now (normally 4:45 each night).
 """
 
 import argparse
@@ -25,7 +26,19 @@ def main() -> None:
     set_user.add_argument("--password-stdin", action="store_true")
     reparse = sub.add_parser("reparse", help="parse an earlier run's stored pages again")
     reparse.add_argument("run_id", type=int)
+    sub.add_parser("images", help="copy new offer photos now")
     args = parser.parse_args()
+
+    if args.cmd == "images":
+        from . import images
+        from .db import pool
+
+        pool.open(wait=True)
+        try:
+            print(images.nightly())
+        finally:
+            pool.close()
+        return
 
     if args.cmd == "reparse":
         from . import collect

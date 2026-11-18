@@ -230,10 +230,12 @@
     <div class="card-head"><h2>Offers</h2><button onclick={exportOffers} disabled={!d.offers.length}>CSV</button></div>
     <div class="scroll-x">
       <table class="data-table">
-        <thead><tr><th>Shop</th><th>Name in shop</th><th>Size</th><th class="num">Price</th><th class="num">Net</th><th>Stock</th><th>Seen</th></tr></thead>
+        <thead><tr><th></th><th>Shop</th><th>Name in shop</th><th>Size</th><th class="num">Price</th><th class="num">Net</th><th>Stock</th><th>Seen</th></tr></thead>
         <tbody>
           {#each d.offers as o (o.id)}
             <tr class:gone={o.gone_since}>
+              <td class="pic">{#if o.photo}<a href="/api/images/{o.id}?full=1" target="_blank" rel="noopener"><img
+                src="/api/images/{o.id}" alt="" loading="lazy" /></a>{/if}</td>
               <td>{o.shop}</td>
               <td><a href={o.url} target="_blank" rel="noopener noreferrer">{o.name}</a></td>
               <td>{o.size_class !== 'unknown' ? o.size_class : ''}{#if o.pot_size} <span class="muted">{o.pot_size}</span>{/if}</td>
@@ -288,4 +290,6 @@
   .memberships { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: -4px 0 12px; font-size: 14px; color: var(--muted); }
   .memberships label { display: flex; gap: 6px; align-items: center; }
   .memberships select { width: auto; color: var(--text); }
+  .pic { width: 56px; padding-right: 8px; }
+  .pic img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; display: block; background: var(--surface-2); }
 </style>

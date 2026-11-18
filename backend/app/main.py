@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import analytics, auth, collect, collector, config, groupings, migrate, shops, taxa, taxonomy, trends
+from . import analytics, auth, collect, collector, config, groupings, images, migrate, shops, taxa, taxonomy, trends
 from .db import pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -21,6 +21,8 @@ scheduler.add_job(
     coalesce=True,
     misfire_grace_time=3600,
 )
+# Photos after the night run (it takes ~45 min); waits for the run lock if that runs longer.
+scheduler.add_job(images.nightly, "cron", hour=4, minute=45, id="images", coalesce=True, misfire_grace_time=3600)
 scheduler.add_job(
     collector.check_overdue, "cron", hour=6, minute=0, id="pi_overdue", coalesce=True, misfire_grace_time=3600,
 )
@@ -61,6 +63,7 @@ app.include_router(taxa.router)
 app.include_router(analytics.router)
 app.include_router(trends.router)
 app.include_router(groupings.router)
+app.include_router(images.router)
 app.include_router(collector.router)
 
 
