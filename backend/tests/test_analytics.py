@@ -205,3 +205,10 @@ def test_grouping_rework(data):
     names = {g["name"] for g in next(x for x in sp["groupings"] if x["id"] == sp["id"])["groups"]}
     assert {"Hoya carnosa", "Hoya pubicalyx"} <= names
     groupings.delete(sp["id"])
+
+    # Seed preview saves nothing; the generic plant list has no memberships.
+    before = len(groupings.list_groupings())
+    plan = {g["name"]: g["members"] for g in groupings.seed(start="type")}
+    assert data["rosita"] in plan["Cultivars"] and len(groupings.list_groupings()) == before
+    assert groupings.seed(start="empty") == []
+    assert {p["key"] for p in groupings.all_plants(days=28, shops=[data["shop"]])} >= {data["rosita"], data["kerrii"]}

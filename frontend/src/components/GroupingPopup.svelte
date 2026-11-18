@@ -24,7 +24,7 @@
     <div class="popup" role="dialog" aria-modal="true" aria-label="Grouping">
       <button class="close" aria-label="Close" onclick={close}>✕</button>
       {#key groupingPopup.id}
-        <GroupingEditor id={groupingPopup.id} onclose={close} onopen={(id) => (groupingPopup.id = String(id))} />
+        <GroupingEditor id={groupingPopup.id} onclose={close} />
       {/key}
     </div>
   </div>
@@ -37,19 +37,21 @@
     z-index: 100;
     background: rgb(0 0 0 / 0.55);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding: 4vh 16px;
-    overflow-y: auto;
+    padding: 2vh 1.5vw;
   }
   .popup {
     position: relative;
-    width: min(1180px, 100%);
+    width: min(1600px, 100%);
+    height: 96vh;
+    display: flex;
+    flex-direction: column;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 12px;
     box-shadow: 0 20px 60px rgb(0 0 0 / 0.45);
-    padding: 18px 20px 8px;
+    padding: 16px 20px;
   }
   .close {
     position: absolute;
@@ -64,4 +66,5 @@
   }
   .close:hover { color: var(--text); background: var(--surface-2); }
   .popup :global(.topbar) { padding-right: 36px; }
+  .popup > :global(.editor) { flex: 1; min-height: 0; height: auto; }
 </style>

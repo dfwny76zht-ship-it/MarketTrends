@@ -50,75 +50,72 @@ class GroupingIn(BaseModel):
     start: str = "empty"  # empty | species | type | copy:<grouping id>
 
 
-def _seed_from_type(conn, gid: int) -> None:
-    """Groups Species / Forms / Cultivars / Hybrids, filled with every plant that has confirmed offers."""
-    ids = {}
-    for pos, (val, name) in enumerate([("species", "Species"), ("form", "Forms / subspecies"),
-                                       ("cultivar", "Cultivars"), ("hybrid", "Hybrids")]):
-        ids[val] = conn.execute(
-            "INSERT INTO grouping_groups (grouping_id, name, position) VALUES (%s, %s, %s) RETURNING id", (gid, name, pos)
-        ).fetchone()["id"]
-    conn.execute(
-        "INSERT INTO grouping_members (grouping_id, group_id, species_id)"
-        " SELECT DISTINCT %s, %s, a.species_id FROM assignments a"
-        " WHERE a.confirmed AND NOT a.ignored AND a.cultivar_id IS NULL AND a.species_id IS NOT NULL",
-        (gid, ids["species"]),
-    )
-    conn.execute(
-        "INSERT INTO grouping_members (grouping_id, group_id, cultivar_id)"
-        " SELECT DISTINCT %s, CASE WHEN c.kind IN ('form', 'subspecies') THEN %s WHEN c.kind = 'hybrid' THEN %s ELSE %s END, c.id"
-        " FROM assignments a JOIN cultivars c ON c.id = a.cultivar_id WHERE a.confirmed AND NOT a.ignored",
-        (gid, ids["form"], ids["hybrid"], ids["cultivar"]),
-    )
+def seed_plan(conn, start: str) -> list[dict]:
+    """Groups and members for a starting point, without saving anything: [{name, members: [key]}]."""
+    if start == "empty":
+        return []
+    if start == "species":
+        rows = conn.execute(
+            "SELECT DISTINCT s.id, s.epithet FROM assignments a JOIN species s ON s.id = a.species_id"
+            " WHERE a.confirmed AND NOT a.ignored ORDER BY s.epithet"
+        ).fetchall()
+        plan = [{"name": f"Hoya {r['epithet']}", "members": [f"s{r['id']}"]} for r in rows]
+        hybrids = [f"c{r['id']}" for r in conn.execute(
+            "SELECT DISTINCT c.id FROM assignments a JOIN cultivars c ON c.id = a.cultivar_id"
+            " WHERE a.confirmed AND NOT a.ignored AND c.species_id IS NULL ORDER BY 1"
+        )]
+        if hybrids:
+            plan.append({"name": "Hybrids", "members": hybrids})
+        return plan
+    if start == "type":
+        species = [f"s{r['species_id']}" for r in conn.execute(
+            "SELECT DISTINCT a.species_id FROM assignments a WHERE a.confirmed AND NOT a.ignored"
+            " AND a.cultivar_id IS NULL AND a.species_id IS NOT NULL ORDER BY 1"
+        )]
+        by_kind: dict[str, list] = {"form": [], "cultivar": [], "hybrid": []}
+        for r in conn.execute(
+            "SELECT DISTINCT c.id, c.kind FROM assignments a JOIN cultivars c ON c.id = a.cultivar_id"
+            " WHERE a.confirmed AND NOT a.ignored ORDER BY 1"
+        ):
+            by_kind["form" if r["kind"] in ("form", "subspecies") else r["kind"]].append(f"c{r['id']}")
+        return [{"name": "Species", "members": species}, {"name": "Forms / subspecies", "members": by_kind["form"]},
+                {"name": "Cultivars", "members": by_kind["cultivar"]}, {"name": "Hybrids", "members": by_kind["hybrid"]}]
+    if start.startswith("copy:"):
+        try:
+            source = int(start[5:])
+        except ValueError:
+            raise HTTPException(422, "Unknown starting point.")
+        src = conn.execute("SELECT kind FROM groupings WHERE id = %s", (source,)).fetchone()
+        if not src:
+            raise HTTPException(404, "Grouping to copy not found.")
+        if src["kind"] == "type":
+            return seed_plan(conn, "type")
+        if src["kind"] != "manual":
+            raise HTTPException(422, "Price ranges can't be copied into plant groups.")
+        plan = []
+        for g in conn.execute("SELECT id, name FROM grouping_groups WHERE grouping_id = %s ORDER BY position, id",
+                              (source,)).fetchall():
+            plan.append({"name": g["name"], "members": [r["key"] for r in conn.execute(
+                "SELECT CASE WHEN species_id IS NOT NULL THEN 's' || species_id ELSE 'c' || cultivar_id END AS key"
+                " FROM grouping_members WHERE group_id = %s ORDER BY 1", (g["id"],))]})
+        return plan
+    raise HTTPException(422, "Unknown starting point.")
 
 
-def _seed_from_species(conn, gid: int) -> None:
-    """One group per species with confirmed offers (its forms and cultivars come along via the species),
-    plus one group for hybrids without a species."""
-    rows = conn.execute(
-        "SELECT DISTINCT s.id, s.epithet FROM assignments a JOIN species s ON s.id = a.species_id"
-        " WHERE a.confirmed AND NOT a.ignored ORDER BY s.epithet"
-    ).fetchall()
-    for pos, r in enumerate(rows):
-        g = conn.execute(
+def _apply_plan(conn, gid: int, plan: list[dict]) -> None:
+    for pos, g in enumerate(plan):
+        group_id = conn.execute(
             "INSERT INTO grouping_groups (grouping_id, name, position) VALUES (%s, %s, %s) RETURNING id",
-            (gid, f"Hoya {r['epithet']}", pos),
+            (gid, g["name"], pos),
         ).fetchone()["id"]
-        conn.execute("INSERT INTO grouping_members (grouping_id, group_id, species_id) VALUES (%s, %s, %s)",
-                     (gid, g, r["id"]))
-    hybrids = conn.execute(
-        "SELECT DISTINCT c.id FROM assignments a JOIN cultivars c ON c.id = a.cultivar_id"
-        " WHERE a.confirmed AND NOT a.ignored AND c.species_id IS NULL"
-    ).fetchall()
-    if hybrids:
-        g = conn.execute(
-            "INSERT INTO grouping_groups (grouping_id, name, position) VALUES (%s, 'Hybrids', %s) RETURNING id",
-            (gid, len(rows)),
-        ).fetchone()["id"]
-        for h in hybrids:
-            conn.execute("INSERT INTO grouping_members (grouping_id, group_id, cultivar_id) VALUES (%s, %s, %s)",
-                         (gid, g, h["id"]))
+        for key in g["members"]:
+            _set_one(conn, gid, key, group_id)
 
 
-def _seed_from_copy(conn, gid: int, source: int) -> None:
-    src = conn.execute("SELECT kind FROM groupings WHERE id = %s", (source,)).fetchone()
-    if not src:
-        raise HTTPException(404, "Grouping to copy not found.")
-    if src["kind"] == "type":
-        return _seed_from_type(conn, gid)
-    if src["kind"] != "manual":
-        raise HTTPException(422, "Price ranges can't be copied into plant groups.")
-    for g in conn.execute("SELECT id, name, position FROM grouping_groups WHERE grouping_id = %s ORDER BY position, id",
-                          (source,)).fetchall():
-        new = conn.execute(
-            "INSERT INTO grouping_groups (grouping_id, name, position) VALUES (%s, %s, %s) RETURNING id",
-            (gid, g["name"], g["position"]),
-        ).fetchone()["id"]
-        conn.execute(
-            "INSERT INTO grouping_members (grouping_id, group_id, species_id, cultivar_id)"
-            " SELECT %s, %s, species_id, cultivar_id FROM grouping_members WHERE group_id = %s",
-            (gid, new, g["id"]),
-        )
+@router.get("/seed")
+def seed(start: str):
+    with pool.connection() as conn:
+        return seed_plan(conn, start)
 
 
 @router.post("")
@@ -136,17 +133,7 @@ def create(body: GroupingIn):
                 ).fetchone()["id"]
             except errors.UniqueViolation:
                 raise HTTPException(409, f"A grouping called {name} already exists.")
-            if body.start == "species":
-                _seed_from_species(conn, gid)
-            elif body.start == "type":
-                _seed_from_type(conn, gid)
-            elif body.start.startswith("copy:"):
-                try:
-                    _seed_from_copy(conn, gid, int(body.start[5:]))
-                except ValueError:
-                    raise HTTPException(422, "Unknown starting point.")
-            elif body.start != "empty":
-                raise HTTPException(422, "Unknown starting point.")
+            _apply_plan(conn, gid, seed_plan(conn, body.start))
         return {"id": gid, "groupings": _all(conn)}
 
 
@@ -302,15 +289,28 @@ def set_member(grouping_id: int, body: MemberIn):
         return _all(conn)
 
 
+@router.get("/plants")
+def all_plants(days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
+               scope: str = "period", types: list[str] | None = Query(None)):
+    """Every plant with offers under the filters, for the editor (memberships come from the grouping list)."""
+    return _plants(None, days, shops, size, scope, types)
+
+
 @router.get("/{grouping_id}/plants")
 def plants(grouping_id: int, days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
+           scope: str = "period", types: list[str] | None = Query(None)):
+    return _plants(grouping_id, days, shops, size, scope, types)
+
+
+def _plants(grouping_id: int | None, days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
            scope: str = "period", types: list[str] | None = Query(None)):
     """Every plant (species-level offers and each cultivar / form / hybrid) with its own membership, its offers
     under the current filters (each offer's latest observation), median net price and a photo."""
     fl = flt.make(days, shops, size, scope, types, None)
     key, name = _key("cultivar"), TAXON_NAME
     with pool.connection() as conn:
-        if not conn.execute("SELECT 1 FROM groupings WHERE id = %s AND kind = 'manual'", (grouping_id,)).fetchone():
+        if grouping_id is not None and not conn.execute(
+                "SELECT 1 FROM groupings WHERE id = %s AND kind = 'manual'", (grouping_id,)).fetchone():
             raise HTTPException(404, "Grouping not found.")
         all_time = fl.scope != "period"
         f, p = flt.where(conn, fl, "obs", period=not all_time)
@@ -322,6 +322,7 @@ def plants(grouping_id: int, days: int = 28, shops: list[int] | None = Query(Non
             f"SELECT {key} AS key, {name} AS name, {flt.TYPE_SQL} AS type,"
             " CASE WHEN a.species_id IS NOT NULL THEN 's' || a.species_id END AS species_key,"
             " count(DISTINCT l.id) AS offers, count(DISTINCT l.shop_id) AS shops,"
+            " count(DISTINCT l.shop_id) FILTER (WHERE o.availability IN ('available', 'low')) AS in_stock_shops,"
             " percentile_cont(0.5) WITHIN GROUP (ORDER BY o.price_eur_net) AS price, sum(o.quantity) AS stock,"
             " max(l.id) FILTER (WHERE EXISTS (SELECT 1 FROM images i WHERE i.listing_id = l.id AND i.status = 'ok')) AS photo"
             f" {BASE} {f} GROUP BY 1, 2, 3, 4 ORDER BY 2",
