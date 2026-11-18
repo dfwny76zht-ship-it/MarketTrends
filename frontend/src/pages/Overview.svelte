@@ -1,9 +1,10 @@
 <script>
   import { api } from '../lib/api.js';
-  import { filters, addToChart, chartWin } from '../lib/state.svelte.js';
+  import { filters, filterParams, addToChart, chartWin } from '../lib/state.svelte.js';
   import { fmtEur, fmtInt, qs, toCsv, downloadCsv } from '../lib/viz.js';
   import FilterBar from '../components/FilterBar.svelte';
   import Sparkline from '../components/Sparkline.svelte';
+  import ChartPanel from '../components/ChartPanel.svelte';
 
   let ov = $state(null);
   let rows = $state([]);
@@ -21,12 +22,12 @@
     ['disappeared', 'Gone'],
   ];
 
-  async function load(days, shops, level, size) {
+  async function load(params, level) {
     error = '';
     try {
       const [o, t] = await Promise.all([
-        api(`/analytics/overview${qs({ days, shops })}`),
-        api(`/analytics/taxa${qs({ days, shops, level, size })}`),
+        api(`/analytics/overview${qs(params)}`),
+        api(`/analytics/taxa${qs({ ...params, level })}`),
       ]);
       ov = o;
       rows = t;
@@ -36,7 +37,7 @@
   }
 
   $effect(() => {
-    load(filters.days, [...filters.shops], filters.level, filters.size);
+    load(filterParams(), filters.level);
   });
 
   function eventSeries(kind) {
@@ -93,7 +94,7 @@
 </script>
 
 <h1>Overview</h1>
-<FilterBar shops={ov?.shops ?? []} showLevel showSize />
+<FilterBar level size />
 {#if error}<p class="error">{error}</p>{/if}
 
 {#if ov}
@@ -121,6 +122,8 @@
     {/each}
   </div>
 {/if}
+
+<ChartPanel />
 
 <div class="card">
   <div class="table-head">

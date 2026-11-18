@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { filters, addToChart, chartWin } from '../lib/state.svelte.js';
+  import { filters, filterParams, addToChart, chartWin, meta, loadMeta, setGroupings } from '../lib/state.svelte.js';
   import { baseOption, lineSeries, shopColor, cssVar, STATUS_COLOR, fmtEur, fmtInt, fmtDay, qs, toCsv, downloadCsv } from '../lib/viz.js';
   import { AVAILABILITY, availabilityTone, money } from '../lib/labels.js';
   import FilterBar from '../components/FilterBar.svelte';
@@ -9,7 +9,6 @@
   let { key } = $props();
 
   let d = $state(null);
-  let shops = $state([]);
   let error = $state('');
 
   const EVENT_LABEL = {
@@ -17,21 +16,20 @@
     restock: 'Restock', price_change: 'Price change',
   };
 
-  async function load(k, days, sel, size) {
+  async function load(k, params) {
     error = '';
     try {
-      d = await api(`/analytics/taxon/${k}${qs({ days, shops: sel, size })}`);
-      if (!shops.length) shops = (await api('/analytics/overview?days=7')).shops;
+      d = await api(`/analytics/taxon/${k}${qs(params)}`);
     } catch (e) {
       error = e.message;
     }
   }
 
   $effect(() => {
-    load(key, filters.days, [...filters.shops], filters.size);
+    load(key, filterParams());
   });
 
-  const shopIds = $derived(shops.map((s) => s.id));
+  const shopIds = $derived(meta.shops.map((s) => s.id));
   const days = $derived([...new Set((d?.series ?? []).flatMap((s) => s.points.map((p) => p.day)))].sort());
   const hasQty = $derived((d?.series ?? []).some((s) => s.points.some((p) => p.quantity != null)));
   const last = $derived(d?.overall?.at(-1));
@@ -95,6 +93,19 @@
     return o;
   }
 
+  loadMeta();
+  const manual = $derived(meta.groupings.filter((g) => g.kind === 'manual' && g.groups.length));
+  function currentGroup(g) {
+    return g.groups.find((x) => x.members.some((m) => m.key === key))?.id ?? '';
+  }
+  async function setGroup(g, value) {
+    try {
+      setGroupings(await api(`/groupings/${g.id}/members`, { method: 'POST', body: { key, group_id: value ? Number(value) : null } }));
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
   async function toggleWatch() {
     try {
       await api(`/analytics/watchlist${d.watched ? '/remove' : ''}`, { method: 'POST', body: { key } });
@@ -124,7 +135,19 @@
     <button class="icon-btn" disabled={chartWin.keys.includes(key)} onclick={() => addToChart(key, d.title)}>＋ chart</button>
     <a class="muted" href="#/species/{key.startsWith('s') ? key.slice(1) : 'c' + key.slice(1)}">Edit species</a>
   </div>
-  <FilterBar shops={shops} showSize />
+  {#if manual.length}
+    <div class="memberships">
+      {#each manual as g (g.id)}
+        <label>{g.name}
+          <select value={currentGroup(g)} onchange={(e) => setGroup(g, e.target.value)}>
+            <option value="">—</option>
+            {#each g.groups as x (x.id)}<option value={x.id}>{x.name}</option>{/each}
+          </select>
+        </label>
+      {/each}
+    </div>
+  {/if}
+  <FilterBar size types={false} />
 
   <div class="tiles">
     <div class="tile"><div class="label">Shops offering</div><div class="value">{last?.shops ?? '–'}</div></div>
@@ -262,4 +285,7 @@
   .timeline td i { margin: 0; display: block; width: 12px; height: 18px; }
   .small { font-size: 12px; margin-top: 4px; }
   tr.gone { opacity: 0.6; }
+  .memberships { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: -4px 0 12px; font-size: 14px; color: var(--muted); }
+  .memberships label { display: flex; gap: 6px; align-items: center; }
+  .memberships select { width: auto; color: var(--text); }
 </style>

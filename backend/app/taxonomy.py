@@ -287,6 +287,25 @@ def confirm_likely() -> int:
 
 # ---------- merging ----------
 
+def _move_members(conn, col: str, source_id: int, target_id: int) -> None:
+    """Manual group memberships follow a merge; where the target already has a group in that grouping, it wins."""
+    conn.execute(
+        f"UPDATE grouping_members m SET {col} = %s WHERE m.{col} = %s AND NOT EXISTS"
+        f" (SELECT 1 FROM grouping_members t WHERE t.grouping_id = m.grouping_id AND t.{col} = %s)",
+        (target_id, source_id, target_id),
+    )
+
+
+def _convert_members(conn, from_col: str, from_id: int, to_col: str, to_id: int) -> None:
+    """A species became a cultivar (or back): its manual group memberships go along."""
+    conn.execute(
+        f"INSERT INTO grouping_members (grouping_id, group_id, {to_col})"
+        f" SELECT grouping_id, group_id, %s FROM grouping_members WHERE {from_col} = %s ON CONFLICT DO NOTHING",
+        (to_id, from_id),
+    )
+    conn.execute(f"DELETE FROM grouping_members WHERE {from_col} = %s", (from_id,))
+
+
 def merge_cultivars(source_id: int, target_id: int) -> None:
     if source_id == target_id:
         raise ValueError("Can't merge a cultivar into itself.")
@@ -299,6 +318,7 @@ def merge_cultivars(source_id: int, target_id: int) -> None:
                 f"UPDATE {table} SET cultivar_id = %s, species_id = coalesce(%s, species_id) WHERE cultivar_id = %s",
                 (target_id, target["species_id"], source_id),
             )
+        _move_members(conn, "cultivar_id", source_id, target_id)
         conn.execute("DELETE FROM cultivars WHERE id = %s", (source_id,))
 
 
@@ -316,11 +336,13 @@ def merge_species(source_id: int, target_id: int) -> None:
             if twin:
                 for table in ("aliases", "assignments"):
                     conn.execute(f"UPDATE {table} SET cultivar_id = %s WHERE cultivar_id = %s", (twin["id"], c["id"]))
+                _move_members(conn, "cultivar_id", c["id"], twin["id"])
                 conn.execute("DELETE FROM cultivars WHERE id = %s", (c["id"],))
             else:
                 conn.execute("UPDATE cultivars SET species_id = %s WHERE id = %s", (target_id, c["id"]))
         for table in ("aliases", "assignments", "species_synonyms"):
             conn.execute(f"UPDATE {table} SET species_id = %s WHERE species_id = %s", (target_id, source_id))
+        _move_members(conn, "species_id", source_id, target_id)
         conn.execute(
             "INSERT INTO species_synonyms (epithet, species_id) VALUES (%s, %s) ON CONFLICT (epithet) DO UPDATE"
             " SET species_id = EXCLUDED.species_id",
@@ -381,6 +403,7 @@ def species_to_cultivar(species_id: int, kind: str, parent_epithet: str | None =
             conn.execute(f"UPDATE {table} SET cultivar_id = %s WHERE species_id = %s AND cultivar_id IS NULL",
                          (cid, species_id))
             conn.execute(f"UPDATE {table} SET species_id = %s WHERE species_id = %s", (parent, species_id))
+        _convert_members(conn, "species_id", species_id, "cultivar_id", cid)
         conn.execute("DELETE FROM species_synonyms WHERE species_id = %s", (species_id,))
         note = f"Was listed as species Hoya {sp['epithet']}." + (f" {sp['notes']}" if sp["notes"] else "")
         conn.execute("UPDATE cultivars SET notes = trim(notes || ' ' || %s) WHERE id = %s", (note, cid))
@@ -399,6 +422,7 @@ def cultivar_to_species(cultivar_id: int, epithet: str | None = None) -> int:
         for table in ("aliases", "assignments"):
             conn.execute(f"UPDATE {table} SET species_id = %s, cultivar_id = NULL WHERE cultivar_id = %s",
                          (sid, cultivar_id))
+        _convert_members(conn, "cultivar_id", cultivar_id, "species_id", sid)
         if c["notes"]:
             conn.execute("UPDATE species SET notes = trim(notes || ' ' || %s) WHERE id = %s", (c["notes"], sid))
         conn.execute("DELETE FROM cultivars WHERE id = %s", (cultivar_id,))

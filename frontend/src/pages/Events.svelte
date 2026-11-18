@@ -1,28 +1,26 @@
 <script>
   import { api } from '../lib/api.js';
-  import { filters } from '../lib/state.svelte.js';
+  import { filterParams } from '../lib/state.svelte.js';
   import { fmtDay, qs, toCsv, downloadCsv } from '../lib/viz.js';
   import FilterBar from '../components/FilterBar.svelte';
 
   const KINDS = { restock: 'Restock', new: 'New', back_in_stock: 'Back in stock', sold_out: 'Sold out', price_change: 'Price change', disappeared: 'Gone' };
 
   let rows = $state([]);
-  let shops = $state([]);
   let kind = $state('');
   let q = $state('');
   let error = $state('');
 
-  async function load(days, sel, k) {
+  async function load(params, k) {
     try {
-      rows = await api(`/analytics/events${qs({ days, shops: sel, kind: k })}`);
-      if (!shops.length) shops = (await api('/analytics/overview?days=7')).shops;
+      rows = await api(`/analytics/events${qs({ ...params, kind: k })}`);
       error = '';
     } catch (e) {
       error = e.message;
     }
   }
   $effect(() => {
-    load(filters.days, [...filters.shops], kind);
+    load(filterParams(), kind);
   });
 
   const visible = $derived.by(() => {
@@ -39,7 +37,7 @@
 </script>
 
 <h1>Events</h1>
-<FilterBar {shops} />
+<FilterBar size />
 <div class="chip-row" style="margin-bottom: 12px">
   <button class="chip" class:on={!kind} onclick={() => (kind = '')}>All</button>
   {#each Object.entries(KINDS) as [k, label]}

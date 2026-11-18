@@ -1,21 +1,22 @@
 <script>
   import { api } from '../lib/api.js';
-  import { filters, addToChart, chartWin } from '../lib/state.svelte.js';
+  import { filterParams, addToChart, chartWin } from '../lib/state.svelte.js';
   import { fmtEur, fmtInt, qs } from '../lib/viz.js';
   import Sparkline from '../components/Sparkline.svelte';
+  import FilterBar from '../components/FilterBar.svelte';
 
   let items = $state([]);
   let data = $state({});
   let error = $state('');
 
-  async function load(days) {
+  async function load(params) {
     try {
       items = await api('/analytics/watchlist');
       const s = items.filter((w) => w.key.startsWith('s')).map((w) => w.key);
       const c = items.filter((w) => w.key.startsWith('c')).map((w) => w.key);
       const [a, b] = await Promise.all([
-        s.length ? api(`/analytics/taxa${qs({ days, level: 'species', keys: s })}`) : [],
-        c.length ? api(`/analytics/taxa${qs({ days, level: 'cultivar', keys: c })}`) : [],
+        s.length ? api(`/analytics/taxa${qs({ ...params, level: 'species', keys: s })}`) : [],
+        c.length ? api(`/analytics/taxa${qs({ ...params, level: 'cultivar', keys: c })}`) : [],
       ]);
       data = Object.fromEntries([...a, ...b].map((r) => [r.key, r]));
       error = '';
@@ -24,7 +25,7 @@
     }
   }
   $effect(() => {
-    load(filters.days);
+    load(filterParams());
   });
 
   async function remove(key) {
@@ -34,6 +35,7 @@
 </script>
 
 <h1>Watchlist</h1>
+<FilterBar size types={false} groups={false} />
 {#if error}<p class="error">{error}</p>{/if}
 {#if !items.length}
   <p class="muted">Star a species in the Overview or on its page to watch it.</p>

@@ -1,10 +1,10 @@
 <script>
   import * as echarts from 'echarts/core';
-  import { LineChart, BarChart, ScatterChart } from 'echarts/charts';
+  import { LineChart, BarChart, ScatterChart, PieChart } from 'echarts/charts';
   import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent } from 'echarts/components';
   import { SVGRenderer } from 'echarts/renderers';
 
-  echarts.use([LineChart, BarChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, SVGRenderer]);
+  echarts.use([LineChart, BarChart, ScatterChart, PieChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, SVGRenderer]);
 
   /** option: function returning an ECharts option (called again when the colour scheme changes). */
   let { option, height = 280, onclick = null, label = 'Chart' } = $props();

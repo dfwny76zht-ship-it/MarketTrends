@@ -12,6 +12,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from . import filters as flt
 from .auth import current_user
 from .db import pool
 
@@ -47,20 +48,6 @@ def _taxon_filter(key: str) -> tuple[str, int]:
     return ("a.species_id = %s" if m.group(1) == "s" else "a.cultivar_id = %s"), int(m.group(2))
 
 
-def _filters(days: int, shops: list[int] | None, size: str | None) -> tuple[str, list]:
-    sql, params = [], []
-    if days > 0:
-        sql.append("o.observed_at >= now() - make_interval(days => %s)")
-        params.append(days)
-    if shops:
-        sql.append("l.shop_id = ANY(%s)")
-        params.append(shops)
-    if size:
-        sql.append("o.size_class = %s")
-        params.append(size)
-    return (" AND " + " AND ".join(sql)) if sql else "", params
-
-
 BASE = """
 FROM observations o
 JOIN listings l ON l.id = o.listing_id
@@ -82,28 +69,26 @@ WHERE true
 """
 
 
-def _event_filters(days: int, shops: list[int] | None) -> tuple[str, list]:
-    sql, params = [], []
-    if days > 0:
-        sql.append("e.happened_at >= now() - make_interval(days => %s)")
-        params.append(days)
-    if shops:
-        sql.append("l.shop_id = ANY(%s)")
-        params.append(shops)
-    return (" AND " + " AND ".join(sql)) if sql else "", params
-
-
 def _num(v):
     return float(v) if v is not None else None
+
+
+@router.get("/shops")
+def shop_list():
+    with pool.connection() as conn:
+        return conn.execute("SELECT id, name FROM shops WHERE adapter IS NOT NULL ORDER BY id").fetchall()
 
 
 # ---------- overview ----------
 
 @router.get("/overview")
-def overview(days: int = 28, shops: list[int] | None = Query(None)):
-    f, p = _filters(days, shops, None)
-    ef, ep = _event_filters(days, shops)
+def overview(days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
+             scope: str = "period", types: list[str] | None = Query(None), group: list[int] | None = Query(None)):
+    fl = flt.make(days, shops, size, scope, types, group)
+    shops = fl.shops
     with pool.connection() as conn:
+        f, p = flt.where(conn, fl, "obs")
+        ef, ep = flt.where(conn, fl, "event")
         daily = conn.execute(
             f"SELECT {DAY} AS day, count(DISTINCT l.id) AS offers,"
             " count(DISTINCT coalesce('s' || a.species_id, 'c' || a.cultivar_id)) AS species"
@@ -111,8 +96,9 @@ def overview(days: int = 28, shops: list[int] | None = Query(None)):
             p,
         ).fetchall()
         events = conn.execute(
-            f"SELECT (e.happened_at AT TIME ZONE 'Europe/Berlin')::date AS day, e.kind, count(*) AS n {EVENTS_BASE} {ef}"
-            " GROUP BY 1, 2 ORDER BY 1",
+            f"SELECT (e.happened_at AT TIME ZONE 'Europe/Berlin')::date AS day, e.kind, count(*) AS n {EVENTS_BASE}"
+            + (" AND a.listing_id IS NOT NULL" if fl.types or fl.groups else "")
+            + f" {ef} GROUP BY 1, 2 ORDER BY 1",
             ep,
         ).fetchall()
         unassigned = conn.execute(
@@ -141,13 +127,16 @@ def overview(days: int = 28, shops: list[int] | None = Query(None)):
 
 @router.get("/taxa")
 def taxa(days: int = 28, level: str = "species", shops: list[int] | None = Query(None),
-         size: str | None = None, keys: list[str] | None = Query(None)):
-    f, p = _filters(days, shops, size)
+         size: str | None = None, keys: list[str] | None = Query(None), scope: str = "period",
+         types: list[str] | None = Query(None), group: list[int] | None = Query(None)):
+    fl = flt.make(days, shops, size, scope, types, group)
     key, name = _key(level), _name(level)
-    if keys:
-        f += f" AND {key} = ANY(%s)"
-        p = p + [keys]
     with pool.connection() as conn:
+        f, p = flt.where(conn, fl, "obs")
+        ef, ep = flt.where(conn, fl, "event")
+        if flt._list(keys):
+            f += f" AND {key} = ANY(%s)"
+            p = p + [list(keys)]
         rows = conn.execute(
             f"SELECT {key} AS key, {name} AS name, {DAY} AS day,"
             " percentile_cont(0.5) WITHIN GROUP (ORDER BY o.price_eur_net) AS price,"
@@ -157,7 +146,6 @@ def taxa(days: int = 28, level: str = "species", shops: list[int] | None = Query
             f" {BASE} {f} GROUP BY 1, 2, 3 ORDER BY 1, 3",
             p,
         ).fetchall()
-        ef, ep = _event_filters(days, shops)
         ev = conn.execute(
             f"SELECT {key} AS key, e.kind, (e.happened_at AT TIME ZONE 'Europe/Berlin')::date AS day, count(*) AS n"
             f" {EVENTS_BASE} AND a.listing_id IS NOT NULL {ef} GROUP BY 1, 2, 3",
@@ -195,10 +183,15 @@ def taxa(days: int = 28, level: str = "species", shops: list[int] | None = Query
 # ---------- one species / cultivar ----------
 
 @router.get("/taxon/{key}")
-def taxon(key: str, days: int = 0, shops: list[int] | None = Query(None), size: str | None = None):
+def taxon(key: str, days: int = 0, shops: list[int] | None = Query(None), size: str | None = None,
+          scope: str = "period", types: list[str] | None = Query(None), group: list[int] | None = Query(None)):
     where, tid = _taxon_filter(key)
-    f, p = _filters(days, shops, size)
+    fl = flt.make(days, shops, size, scope, types, group)
+    shops = fl.shops
     with pool.connection() as conn:
+        f, p = flt.where(conn, fl, "obs")
+        nf, np_ = flt.where(conn, fl, "obs", period=False)
+        ef, ep = flt.where(conn, fl, "event")
         if key.startswith("s"):
             head = conn.execute("SELECT id, epithet, in_lims, notes FROM species WHERE id = %s", (tid,)).fetchone()
             if not head:
@@ -235,20 +228,18 @@ def taxon(key: str, days: int = 0, shops: list[int] | None = Query(None), size: 
             f"SELECT o.size_class, sh.name AS shop, percentile_cont(0.5) WITHIN GROUP (ORDER BY o.price_eur_net) AS price,"
             " count(DISTINCT l.id) AS offers"
             f" {BASE} AND {where} AND o.id IN (SELECT DISTINCT ON (listing_id) id FROM observations"
-            "   ORDER BY listing_id, observed_at DESC) " + _filters(0, shops, None)[0]
-            + " GROUP BY 1, 2 ORDER BY 1, 2",
-            [tid] + _filters(0, shops, None)[1],
+            f"   ORDER BY listing_id, observed_at DESC) {nf}"
+            " GROUP BY 1, 2 ORDER BY 1, 2",
+            [tid] + np_,
         ).fetchall()
         offers = conn.execute(
             "SELECT l.id, l.name, l.url, l.gone_since, sh.name AS shop, o.price, o.currency, o.price_basis,"
             " o.price_eur_net, o.availability, o.quantity, o.size_class, o.pot_size, o.observed_at, o.source"
             f" {BASE} AND {where} AND o.id IN (SELECT DISTINCT ON (listing_id) id FROM observations"
-            "   ORDER BY listing_id, observed_at DESC)"
-            + (" AND l.shop_id = ANY(%s)" if shops else "")
-            + " ORDER BY l.gone_since IS NOT NULL, sh.name, o.price_eur_net",
-            [tid] + ([shops] if shops else []),
+            f"   ORDER BY listing_id, observed_at DESC) {nf}"
+            " ORDER BY l.gone_since IS NOT NULL, sh.name, o.price_eur_net",
+            [tid] + np_,
         ).fetchall()
-        ef, ep = _event_filters(days, shops)
         events = conn.execute(
             "SELECT e.id, e.kind, e.happened_at, e.old_value, e.new_value, l.name, sh.name AS shop"
             f" {EVENTS_BASE} AND {where} {ef} ORDER BY e.happened_at DESC LIMIT 200",
@@ -294,9 +285,11 @@ def taxon(key: str, days: int = 0, shops: list[int] | None = Query(None), size: 
 # ---------- price vs. quantity ----------
 
 @router.get("/scatter")
-def scatter(days: int = 0, level: str = "species", shops: list[int] | None = Query(None), size: str | None = None):
-    f, p = _filters(days, shops, size)
+def scatter(days: int = 0, level: str = "species", shops: list[int] | None = Query(None), size: str | None = None,
+            scope: str = "period", types: list[str] | None = Query(None), group: list[int] | None = Query(None)):
+    fl = flt.make(days, shops, size, scope, types, group)
     with pool.connection() as conn:
+        f, p = flt.where(conn, fl, "obs")
         rows = conn.execute(
             f"WITH latest AS (SELECT l.shop_id, max(o.observed_at) AS t {BASE} {f} AND o.quantity IS NOT NULL GROUP BY 1)"
             f" SELECT {_key(level)} AS key, {_name(level)} AS name, sh.id AS shop_id, sh.name AS shop,"
@@ -310,11 +303,108 @@ def scatter(days: int = 0, level: str = "species", shops: list[int] | None = Que
     return [dict(r, price=_num(r["price"])) for r in rows]
 
 
+# ---------- breakdown: pie / bars / over time by grouping ----------
+
+MEASURES = {
+    "offers": "count(DISTINCT l.id)",
+    "species": None,  # filled in per level
+    "stock": "sum(o.quantity)",
+    "value": "sum(o.quantity * o.price_eur_net)",
+}
+
+
+@router.get("/breakdown")
+def breakdown(by: str = "top", measure: str = "offers", mode: str = "snapshot", split: bool = False,
+              level: str = "species", days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
+              scope: str = "period", types: list[str] | None = Query(None), group: list[int] | None = Query(None),
+              top: int = 5):
+    """by: 'top' (top species), 'shop', or a grouping id. mode: 'snapshot' (each offer's latest observation)
+    or 'series' (per day). split: one panel per shop."""
+    if measure not in MEASURES:
+        raise HTTPException(422, "Unknown measure.")
+    if mode not in ("snapshot", "series"):
+        raise HTTPException(422, "Unknown mode.")
+    fl = flt.make(days, shops, size, scope, types, group)
+    m_sql = MEASURES[measure] or f"count(DISTINCT {_key(level)})"
+    with pool.connection() as conn:
+        snapshot_all_time = mode == "snapshot" and fl.scope != "period"
+        f, p = flt.where(conn, fl, "obs", period=not snapshot_all_time)
+        if mode == "snapshot":
+            window = "" if snapshot_all_time or fl.days <= 0 else " WHERE observed_at >= now() - make_interval(days => %s)"
+            f += (" AND o.id IN (SELECT DISTINCT ON (listing_id) id FROM observations"
+                  f"{window} ORDER BY listing_id, observed_at DESC)")
+            if window:
+                p = p + [fl.days]
+        grouping = None
+        if by == "top":
+            g_sql, n_sql = _key(level), _name(level)
+        elif by == "shop":
+            g_sql, n_sql = "l.shop_id::text", "sh.name"
+        else:
+            try:
+                gid = int(by)
+            except ValueError:
+                raise HTTPException(422, "Unknown grouping.")
+            grouping = flt.load_groupings(conn, [gid]).get(gid)
+            if not grouping:
+                raise HTTPException(404, "Grouping not found.")
+            g_sql, n_sql = f"{flt.group_expr(grouping, 'o.price_eur_net')}::text", "NULL::text"
+        cols = ["l.shop_id AS panel" if split else "NULL::integer AS panel",
+                f"{DAY} AS day" if mode == "series" else "NULL::date AS day"]
+        rows = conn.execute(
+            f"SELECT {', '.join(cols)}, {g_sql} AS g, max({n_sql}) AS name, {m_sql} AS v"
+            f" {BASE} {f} GROUP BY 1, 2, 3 ORDER BY 1, 2",
+            p,
+        ).fetchall()
+        panels = []
+        if split:
+            panels = conn.execute(
+                "SELECT id, name FROM shops WHERE id = ANY(%s) ORDER BY id", [list({r["panel"] for r in rows})]
+            ).fetchall()
+
+    totals: dict[str, float] = defaultdict(float)
+    names: dict[str, str] = {}
+    for r in rows:
+        if r["g"] is not None:
+            totals[r["g"]] += float(r["v"] or 0)
+            names[r["g"]] = r["name"]
+    if grouping:
+        groups = [{"id": str(g["id"]), "name": g["label"]} for g in grouping["groups"]]
+        keep = {g["id"] for g in groups}
+    elif by == "shop":
+        groups = [{"id": k, "name": names[k]} for k in sorted(totals, key=int)]
+        keep = set(totals)
+    else:
+        ranked = sorted(totals, key=lambda k: (-totals[k], names[k]))[:max(1, min(top, 12))]
+        groups = [{"id": k, "name": names[k]} for k in ranked]
+        keep = set(ranked)
+
+    folded: dict[tuple, float] = defaultdict(float)
+    for r in rows:
+        g = r["g"] if r["g"] in keep else "other"
+        if r["v"] is not None:
+            folded[(r["panel"], str(r["day"]) if r["day"] else None, g)] += float(r["v"])
+    if any(k[2] == "other" for k in folded):
+        groups.append({"id": "other", "name": "Other"})
+    # A pie needs parts that add up: counting species across price ranges or shops counts some twice.
+    additive = not (measure == "species" and (by == "shop" or (grouping and grouping["kind"] == "price")))
+    return {
+        "groups": groups, "panels": panels, "additive": additive, "measure": measure, "mode": mode,
+        "rows": [{"panel": k[0], "day": k[1], "group": k[2], "value": round(v, 2)} for k, v in folded.items()],
+    }
+
+
 # ---------- events ----------
 
 @router.get("/events")
-def events(days: int = 28, shops: list[int] | None = Query(None), kind: str | None = None, limit: int = 500):
-    ef, ep = _event_filters(days, shops)
+def events(days: int = 28, shops: list[int] | None = Query(None), kind: str | None = None, limit: int = 500,
+           size: str | None = None, scope: str = "period", types: list[str] | None = Query(None),
+           group: list[int] | None = Query(None)):
+    fl = flt.make(days, shops, size, scope, types, group)
+    with pool.connection() as conn:
+        ef, ep = flt.where(conn, fl, "event")
+    if fl.types or fl.groups:
+        ef += " AND a.listing_id IS NOT NULL"
     if kind:
         ef += " AND e.kind = %s"
         ep.append(kind)

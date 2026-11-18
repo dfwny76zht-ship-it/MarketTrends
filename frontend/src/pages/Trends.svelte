@@ -1,34 +1,33 @@
 <script>
   import { api } from '../lib/api.js';
-  import { filters } from '../lib/state.svelte.js';
+  import { filters, filterParams } from '../lib/state.svelte.js';
   import { baseOption, cssVar, fmtEur, fmtInt, fmtDay, qs, toCsv, downloadCsv } from '../lib/viz.js';
   import FilterBar from '../components/FilterBar.svelte';
   import Chart from '../components/Chart.svelte';
   import Sparkline from '../components/Sparkline.svelte';
 
-  let shops = $state([]);
   let rk = $state(null);
   let sc = $state(null);
   let ws = $state(null);
   let scoreKinds = $state('all');
   let error = $state('');
 
-  async function load(days, sel, level, kinds) {
+  async function load(params, level, kinds) {
     error = '';
     try {
       const kindParam = kinds === 'restock' ? ['restock', 'back_in_stock'] : null;
+      const { days, ...rest } = params;
       [rk, sc, ws] = await Promise.all([
-        api(`/trends/rankings${qs({ days, shops: sel, level })}`),
-        api(`/trends/scores${qs({ level, shops: sel, kinds: kindParam })}`),
-        api(`/trends/wholesale${qs({ days, level })}`),
+        api(`/trends/rankings${qs({ ...params, level })}`),
+        api(`/trends/scores${qs({ ...rest, level, kinds: kindParam })}`),
+        api(`/trends/wholesale${qs({ ...params, level })}`),
       ]);
-      if (!shops.length) shops = (await api('/analytics/overview?days=7')).shops;
     } catch (e) {
       error = e.message;
     }
   }
   $effect(() => {
-    load(filters.days, [...filters.shops], filters.level, scoreKinds);
+    load(filterParams(), filters.level, scoreKinds);
   });
 
   function wholesaleOption() {
@@ -63,7 +62,7 @@
 </script>
 
 <h1>Trends</h1>
-<FilterBar {shops} showLevel />
+<FilterBar level size />
 {#if error}<p class="error">{error}</p>{/if}
 
 {#if rk}

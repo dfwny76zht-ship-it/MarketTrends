@@ -9,7 +9,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query
 
 from . import ntfy
-from .analytics import EVENTS_BASE, _event_filters, _key, _name, _num
+from . import filters as flt
+from .analytics import BASE, EVENTS_BASE, _key, _name, _num
 from .auth import current_user
 from .db import pool
 
@@ -27,13 +28,15 @@ def _monday(d: date) -> date:
 
 
 @router.get("/scores")
-def scores(level: str = "species", shops: list[int] | None = Query(None), kinds: list[str] | None = Query(None)):
+def scores(level: str = "species", kinds: list[str] | None = Query(None), shops: list[int] | None = Query(None), size: str | None = None,
+           scope: str = "period", types: list[str] | None = Query(None), group: list[int] | None = Query(None)):
     """Events per week over the last 16 weeks, and recent rate / earlier rate per species."""
-    ef, ep = _event_filters(7 * (RECENT_WEEKS + BEFORE_WEEKS) + 7, shops)
-    if kinds:
-        ef += " AND e.kind = ANY(%s)"
-        ep.append(kinds)
+    fl = flt.make(7 * (RECENT_WEEKS + BEFORE_WEEKS) + 7, shops, size, scope, types, group)
     with pool.connection() as conn:
+        ef, ep = flt.where(conn, fl, "event")
+        if flt._list(kinds):
+            ef += " AND e.kind = ANY(%s)"
+            ep.append(list(kinds))
         rows = conn.execute(
             f"SELECT {_key(level)} AS key, {_name(level)} AS name, {WEEK} AS week, count(*) AS n,"
             " count(DISTINCT l.shop_id) AS shops"
@@ -73,8 +76,8 @@ def scores(level: str = "species", shops: list[int] | None = Query(None), kinds:
             "taxa": out}
 
 
-def _ranking(conn, kinds: list[str], days: int, shops, level: str, limit: int) -> list[dict]:
-    ef, ep = _event_filters(days, shops)
+def _ranking(conn, kinds: list[str], fl: flt.F, level: str, limit: int) -> list[dict]:
+    ef, ep = flt.where(conn, fl, "event")
     return conn.execute(
         f"SELECT {_key(level)} AS key, {_name(level)} AS name, count(*) AS events, count(DISTINCT l.shop_id) AS shops,"
         " string_agg(DISTINCT sh.name, ', ') AS shop_names, max(e.happened_at) AS last"
@@ -84,19 +87,14 @@ def _ranking(conn, kinds: list[str], days: int, shops, level: str, limit: int) -
     ).fetchall()
 
 
-def _price_moves(conn, days: int, shops, level: str) -> list[dict]:
+def _price_moves(conn, fl: flt.F, level: str) -> list[dict]:
     """Median net price on the first vs. the last night of the period, per species (both must exist)."""
-    shop_sql = " AND l.shop_id = ANY(%s)" if shops else ""
-    period_sql = " AND o.observed_at >= now() - make_interval(days => %s)" if days > 0 else ""
-    params = ([days] if days > 0 else []) + ([shops] if shops else [])
+    f, params = flt.where(conn, fl, "obs")
     rows = conn.execute(
         f"WITH d AS (SELECT {_key(level)} AS key, {_name(level)} AS name,"
         " (o.observed_at AT TIME ZONE 'Europe/Berlin')::date AS day,"
         " percentile_cont(0.5) WITHIN GROUP (ORDER BY o.price_eur_net) AS price"
-        " FROM observations o JOIN listings l ON l.id = o.listing_id"
-        " JOIN assignments a ON a.listing_id = l.id AND a.confirmed AND NOT a.ignored"
-        " LEFT JOIN species s ON s.id = a.species_id LEFT JOIN cultivars c ON c.id = a.cultivar_id"
-        f" WHERE o.price_eur_net IS NOT NULL{period_sql}{shop_sql} GROUP BY 1, 2, 3)"
+        f" {BASE} AND o.price_eur_net IS NOT NULL {f} GROUP BY 1, 2, 3)"
         " SELECT key, name, (array_agg(price ORDER BY day))[1] AS first_price, min(day) AS first_day,"
         " (array_agg(price ORDER BY day DESC))[1] AS last_price, max(day) AS last_day"
         " FROM d GROUP BY 1, 2 HAVING min(day) < max(day)",
@@ -112,21 +110,23 @@ def _price_moves(conn, days: int, shops, level: str) -> list[dict]:
 
 
 @router.get("/rankings")
-def rankings(days: int = 28, level: str = "species", shops: list[int] | None = Query(None), limit: int = 15):
+def rankings(days: int = 28, level: str = "species", limit: int = 15, shops: list[int] | None = Query(None), size: str | None = None,
+           scope: str = "period", types: list[str] | None = Query(None), group: list[int] | None = Query(None)):
+    fl = flt.make(days, shops, size, scope, types, group)
     with pool.connection() as conn:
-        restocked = _ranking(conn, ["restock", "back_in_stock"], days, shops, level, limit)
-        new = _ranking(conn, ["new"], days, shops, level, limit)
-        gone = _ranking(conn, ["disappeared"], days, shops, level, limit)
-        moves = _price_moves(conn, days, shops, level)
+        restocked = _ranking(conn, ["restock", "back_in_stock"], fl, level, limit)
+        new = _ranking(conn, ["new"], fl, level, limit)
+        gone = _ranking(conn, ["disappeared"], fl, level, limit)
+        moves = _price_moves(conn, fl, level)
+        lf, lp = flt.where(conn, flt.F(**{**fl.__dict__, "scope": "listed" if fl.scope in ("period", "ever") else fl.scope}), "listing")
         widest = conn.execute(
             f"SELECT {_key(level)} AS key, {_name(level)} AS name, count(DISTINCT l.shop_id) AS shops,"
             " string_agg(DISTINCT sh.name, ', ') AS shop_names, count(DISTINCT l.id) AS offers"
             " FROM listings l JOIN shops sh ON sh.id = l.shop_id"
             " JOIN assignments a ON a.listing_id = l.id AND a.confirmed AND NOT a.ignored"
             " LEFT JOIN species s ON s.id = a.species_id LEFT JOIN cultivars c ON c.id = a.cultivar_id"
-            " WHERE l.gone_since IS NULL" + (" AND l.shop_id = ANY(%s)" if shops else "")
-            + " GROUP BY 1, 2 ORDER BY 3 DESC, 5 DESC, 2 LIMIT %s",
-            ([shops] if shops else []) + [limit],
+            f" WHERE true {lf} GROUP BY 1, 2 ORDER BY 3 DESC, 5 DESC, 2 LIMIT %s",
+            lp + [limit],
         ).fetchall()
     return {
         "restocked": restocked,
@@ -139,15 +139,23 @@ def rankings(days: int = 28, level: str = "species", shops: list[int] | None = Q
 
 
 @router.get("/wholesale")
-def wholesale(days: int = 0, level: str = "species", limit: int = 15):
+def wholesale(days: int = 0, level: str = "species", limit: int = 15, shops: list[int] | None = Query(None),
+              size: str | None = None, scope: str = "period", types: list[str] | None = Query(None),
+              group: list[int] | None = Query(None)):
     """Stock rises (incoming) and drops (sell-through) between nights at wholesalers and importers."""
-    period = " AND o.observed_at >= now() - make_interval(days => %s)" if days > 0 else ""
-    params = [days] if days > 0 else []
+    fl = flt.make(days, shops, size, scope, types, group)
+    period = " AND o.observed_at >= now() - make_interval(days => %s)" if fl.days > 0 else ""
+    with pool.connection() as conn:
+        lf, lp = flt.where(conn, fl, "listing")
+    params = ([fl.days] if fl.days > 0 else []) + lp
+    need_a = " AND a.listing_id IS NOT NULL" if fl.types or fl.groups else ""
     base = (
         "WITH q AS (SELECT o.listing_id, o.observed_at, o.quantity,"
         "  o.quantity - lag(o.quantity) OVER (PARTITION BY o.listing_id ORDER BY o.observed_at) AS delta"
         "  FROM observations o JOIN listings l ON l.id = o.listing_id JOIN shops sh ON sh.id = l.shop_id"
-        f"  WHERE sh.type IN ('wholesaler', 'importer') AND o.quantity IS NOT NULL{period})"
+        "  LEFT JOIN assignments a ON a.listing_id = l.id AND a.confirmed AND NOT a.ignored"
+        "  LEFT JOIN cultivars c ON c.id = a.cultivar_id"
+        f"  WHERE sh.type IN ('wholesaler', 'importer') AND o.quantity IS NOT NULL{period}{lf}{need_a})"
     )
     with pool.connection() as conn:
         weekly = conn.execute(

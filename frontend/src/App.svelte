@@ -10,6 +10,7 @@
   import Watchlist from './pages/Watchlist.svelte';
   import Scatter from './pages/Scatter.svelte';
   import Trends from './pages/Trends.svelte';
+  import Groupings from './pages/Groupings.svelte';
   import ChartWindow from './components/ChartWindow.svelte';
   import { chartWin } from './lib/state.svelte.js';
 
@@ -26,7 +27,7 @@
 
   function pageFromHash() {
     const p = location.hash.replace(/^#\/?/, '').split('/')[0];
-    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'shops', 'assign', 'species'].includes(p) ? p : 'overview';
+    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'shops', 'assign', 'species', 'groupings'].includes(p) ? p : 'overview';
   }
 
   api('/me', { allow401: true })
@@ -85,6 +86,7 @@
           To assign{#if openCount}<span class="count">{openCount}</span>{/if}
         </a>
         <a href="#/species" class:active={page === 'species'}>Species</a>
+        <a href="#/groupings" class:active={page === 'groupings'}>Groupings</a>
       </nav>
       <button onclick={logout}>Log out</button>
     </header>
@@ -107,6 +109,8 @@
         <Assign onchange={refreshCount} />
       {:else if page === 'species'}
         <Species />
+      {:else if page === 'groupings'}
+        <Groupings />
       {/if}
     </main>
     <ChartWindow />

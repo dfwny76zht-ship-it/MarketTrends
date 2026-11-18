@@ -97,3 +97,65 @@ def test_watchlist(data, db):
     assert any("Krimson Queen" in line and "restocked" in line for line in lines)
     analytics.unwatch(analytics.WatchIn(key=data["rosita"]))
     assert analytics.watchlist() == []
+
+
+def test_groupings_and_breakdown(data):
+    from fastapi import HTTPException
+
+    from app import analytics, groupings
+
+    gs = {g["name"]: g for g in groupings.list_groupings()}
+    price, typ = gs["Price"], gs["Type"]
+    under10 = price["groups"][0]
+    assert under10["label"] == "Under €10"
+
+    # Each offer by its own latest price: both test offers (2.20 and 3.10) are under 10.
+    b = analytics.breakdown(by=str(price["id"]), measure="offers", mode="snapshot", shops=[data["shop"]], days=28)
+    assert {r["group"]: r["value"] for r in b["rows"]} == {str(under10["id"]): 2}
+    assert b["additive"]
+    assert not analytics.breakdown(by=str(price["id"]), measure="species", shops=[data["shop"]])["additive"]
+
+    # Re-cut the price sections: under 3 / 3 and up.
+    G = groupings.GroupIn
+    after = groupings.set_groups(price["id"], groupings.GroupsIn(groups=[
+        G(id=under10["id"], price_from=None, price_to=3), G(price_from=3, price_to=None)]))
+    price = next(g for g in after if g["id"] == price["id"])
+    low, high = price["groups"]
+    b = analytics.breakdown(by=str(price["id"]), measure="stock", shops=[data["shop"]])
+    assert {r["group"]: r["value"] for r in b["rows"]} == {str(low["id"]): 200, str(high["id"]): 50}
+    for bad in ([G(price_from=None, price_to=5), G(price_from=6, price_to=None)],      # gap
+                [G(price_from=None, price_to=5), G(price_from=4, price_to=None)],      # overlap
+                [G(price_from=None, price_to=None), G(price_from=4, price_to=None)]):  # open in the middle
+        with pytest.raises(HTTPException):
+            groupings.set_groups(price["id"], groupings.GroupsIn(groups=bad))
+
+    # Type grouping and type filter.
+    cult = next(g for g in typ["groups"] if g["type_value"] == "cultivar")
+    b = analytics.breakdown(by=str(typ["id"]), measure="offers", shops=[data["shop"]])
+    assert {r["group"]: r["value"] for r in b["rows"]}[str(cult["id"])] == 1
+    rows = analytics.taxa(days=28, level="cultivar", shops=[data["shop"]], types=["cultivar"])
+    assert [r["key"] for r in rows] == [data["rosita"]]
+
+    # Manual grouping: put the cultivar in "Favourites", filter by it everywhere.
+    after = groupings.create(groupings.GroupingIn(name="Picks", kind="manual"))
+    picks = next(g for g in after if g["name"] == "Picks")
+    after = groupings.set_groups(picks["id"], groupings.GroupsIn(groups=[G(name="Favourites")]))
+    fav = next(g for g in after if g["id"] == picks["id"])["groups"][0]
+    groupings.set_member(picks["id"], groupings.MemberIn(key=data["rosita"], group_id=fav["id"]))
+    rows = analytics.taxa(days=28, level="cultivar", shops=[data["shop"]], group=[fav["id"]])
+    assert [r["key"] for r in rows] == [data["rosita"]]
+    ev = analytics.events(days=28, shops=[data["shop"]], group=[fav["id"]])
+    assert ev and all(e["taxon"] == "Hoya carnosa 'Krimson Queen'" for e in ev)
+    b = analytics.breakdown(by=str(picks["id"]), measure="offers", shops=[data["shop"]], split=True)
+    assert {r["group"] for r in b["rows"]} == {str(fav["id"]), "other"} and b["panels"]
+
+    # Over time, top species, by shop.
+    s = analytics.breakdown(by="top", measure="stock", mode="series", level="cultivar", shops=[data["shop"]])
+    assert len({r["day"] for r in s["rows"]}) == 3
+    assert analytics.breakdown(by="shop", measure="offers", shops=[data["shop"]])["groups"][0]["name"] == "Whole"
+
+    # Scopes run.
+    for scope in ("available", "listed", "ever"):
+        assert analytics.breakdown(by="top", scope=scope, shops=[data["shop"]])["rows"]
+    groupings.set_member(picks["id"], groupings.MemberIn(key=data["rosita"], group_id=None))
+    groupings.delete(picks["id"])

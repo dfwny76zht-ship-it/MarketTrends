@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { chartWin, filters, removeFromChart, addToChart, MAX_COMPARE } from '../lib/state.svelte.js';
+  import { chartWin, filters, filterParams, removeFromChart, addToChart, MAX_COMPARE } from '../lib/state.svelte.js';
   import { baseOption, lineSeries, slotColor, fmtEur, fmtInt, qs } from '../lib/viz.js';
   import Chart from './Chart.svelte';
 
@@ -13,7 +13,7 @@
   let dragging = false;
   let timer;
 
-  async function load(keys, days, shops) {
+  async function load(keys, params) {
     if (!keys.length) {
       rows = [];
       return;
@@ -22,8 +22,8 @@
       const s = keys.filter((k) => k.startsWith('s'));
       const c = keys.filter((k) => k.startsWith('c'));
       const [a, b] = await Promise.all([
-        s.length ? api(`/analytics/taxa${qs({ days, shops, level: 'species', keys: s })}`) : [],
-        c.length ? api(`/analytics/taxa${qs({ days, shops, level: 'cultivar', keys: c })}`) : [],
+        s.length ? api(`/analytics/taxa${qs({ ...params, level: 'species', keys: s })}`) : [],
+        c.length ? api(`/analytics/taxa${qs({ ...params, level: 'cultivar', keys: c })}`) : [],
       ]);
       const by = Object.fromEntries([...a, ...b].map((r) => [r.key, r]));
       rows = keys.map((k) => by[k] ?? { key: k, name: chartWin.names[k] ?? k, series: [], events_daily: {}, empty: true });
@@ -34,7 +34,7 @@
   }
 
   $effect(() => {
-    if (chartWin.open) load([...chartWin.keys], filters.days, [...filters.shops]);
+    if (chartWin.open) load([...chartWin.keys], filterParams());
   });
 
   function search(text) {

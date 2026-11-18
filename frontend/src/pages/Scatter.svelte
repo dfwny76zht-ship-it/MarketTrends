@@ -1,29 +1,27 @@
 <script>
   import { api } from '../lib/api.js';
-  import { filters } from '../lib/state.svelte.js';
+  import { filters, filterParams, meta } from '../lib/state.svelte.js';
   import { baseOption, shopColor, cssVar, fmtEur, fmtInt, fmtDay, qs, toCsv, downloadCsv } from '../lib/viz.js';
   import FilterBar from '../components/FilterBar.svelte';
   import Chart from '../components/Chart.svelte';
 
   let points = $state([]);
-  let shops = $state([]);
   let logScale = $state(true);
   let error = $state('');
 
-  async function load(days, sel, level, size) {
+  async function load(params, level) {
     try {
-      points = await api(`/analytics/scatter${qs({ days, shops: sel, level, size })}`);
-      if (!shops.length) shops = (await api('/analytics/overview?days=7')).shops;
+      points = await api(`/analytics/scatter${qs({ ...params, level })}`);
       error = '';
     } catch (e) {
       error = e.message;
     }
   }
   $effect(() => {
-    load(filters.days, [...filters.shops], filters.level, filters.size);
+    load(filterParams(), filters.level);
   });
 
-  const shopIds = $derived(shops.map((s) => s.id));
+  const shopIds = $derived(meta.shops.map((s) => s.id));
   const byShop = $derived.by(() => {
     const m = new Map();
     for (const p of points) {
@@ -76,7 +74,7 @@
 </script>
 
 <h1>Price vs. stock</h1>
-<FilterBar {shops} showLevel showSize />
+<FilterBar level size />
 {#if error}<p class="error">{error}</p>{/if}
 
 <div class="card">
