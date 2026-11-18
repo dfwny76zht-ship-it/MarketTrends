@@ -7,6 +7,19 @@
 
   let points = $state([]);
   let logScale = $state(false);
+  // Table: tap a column title to sort by it, tap again to reverse.
+  const COLS = [['name', 'Species', false], ['shop', 'Shop', false], ['price', 'Price (net)', true], ['quantity', 'Stock', true], ['sizes', 'Sizes', false]];
+  let sortKey = $state('name');
+  let sortDir = $state(1);
+  function sortBy(k) {
+    if (sortKey === k) sortDir = -sortDir;
+    else { sortKey = k; sortDir = ['price', 'quantity'].includes(k) ? -1 : 1; }
+  }
+  const sortedPoints = $derived([...points].sort((a, b) => {
+    const x = a[sortKey] ?? -Infinity;
+    const y = b[sortKey] ?? -Infinity;
+    return (typeof x === 'string' ? x.localeCompare(y) : x < y ? -1 : x > y ? 1 : 0) * sortDir || a.name.localeCompare(b.name);
+  }));
   let error = $state('');
 
   async function load(params, level) {
@@ -93,9 +106,13 @@
   <div class="card-head"><h2>Table</h2><button onclick={exportCsv} disabled={!points.length}>CSV</button></div>
   <div class="scroll-x">
     <table class="data-table">
-      <thead><tr><th>Species</th><th>Shop</th><th class="num">Price (net)</th><th class="num">Stock</th><th>Sizes</th></tr></thead>
+      <thead><tr>
+        {#each COLS as [k, label, num]}
+          <th class:num><button class="sort-btn" onclick={() => sortBy(k)}>{label}{#if sortKey === k}{sortDir > 0 ? ' ▲' : ' ▼'}{/if}</button></th>
+        {/each}
+      </tr></thead>
       <tbody>
-        {#each points as p (p.key + '-' + p.shop_id)}
+        {#each sortedPoints as p (p.key + '-' + p.shop_id)}
           <tr>
             <td><a href="#/taxon/{p.key}"><em>{p.name}</em></a></td>
             <td>{p.shop}</td>

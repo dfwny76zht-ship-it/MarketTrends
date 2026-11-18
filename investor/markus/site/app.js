@@ -56,9 +56,6 @@
   const isCK = (o) => { const t = topOf(o); return t !== 'other' && /^(Carnosa|Kerrii)/.test(groups[t].name); };
   const ckStock = sum(FA.filter(isCK), (o) => o.stock ?? 0) / stockAll;
   const ckValue = sum(FA.filter(isCK), value) / valueAll;
-  $('lead').innerHTML = `Beim niederländischen Großhändler FlorAccess sind <strong>${pct(ckStock)} der Pflanzen im Bestand
-    und ${pct(ckValue)} des Lagerwerts Carnosa- oder Kerrii-artig</strong>. Hinter ${species(FA)} Arten und
-    ${FA.length} Angeboten steckt also ein schmales Sortiment.`;
 
   const tile = (l, v, r = '') => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div>${r ? `<div class="r">${r}</div>` : ''}</div>`;
   const bjr = (v) => `<span class="retail-only">Ben's Jungle: ${v}</span>`;
@@ -299,25 +296,38 @@
   const leafStock = sum(FA.filter((o) => o.group === leafId), (o) => o.stock ?? 0);
   const kerriiOffers = FA.filter((o) => topOf(o) === kerriiId).length;
   const leafOffers = FA.filter((o) => o.group === leafId).length;
-  $('kerrii').innerHTML = `<span class="big">${pct(leafStock / kerriiStock)}</span>der Kerrii-Pflanzen im Bestand
-    (${nf0.format(leafStock)} von ${nf0.format(kerriiStock)}, ${leafOffers} von ${kerriiOffers} Angeboten) sind bewurzelte
-    Einzelblätter ohne Knoten. Sie bleiben lange grün, treiben aber fast nie aus; eine Pflanze wird daraus nicht (Perrone 2022).`;
+  const leafShareAll = leafStock / stockAll;
+  const third = Math.abs(leafShareAll - 1 / 3) < 0.03 ? 'ein Drittel' : pct(leafShareAll);
+  $('kerrii').innerHTML = `<span class="big">${pct(leafStock / kerriiStock)}</span>der Kerrii-Pflanzen sind Einzelblätter ohne Knoten,
+    das ist ${third} des gesamten Hoya-Bestands. Aus einem Einzelblatt wird fast nie eine Pflanze.`;
 
   const carnosa = FA.filter((o) => topOf(o) === carnosaId);
   const others = FA.filter((o) => topOf(o) === 'other');
   const cheapest = carnosa.reduce((m, o) => (o.net < m.net ? o : m), carnosa[0]);
-  $('carnosa').innerHTML = `<span class="big">${pct(carnosa.length / FA.length)}</span>der Angebote (${carnosa.length} von
-    ${FA.length}) sind Carnosa-artig. Carnosa wird billig über Stecklinge vermehrt; die günstigste Sorte kostet ${eur(cheapest.net)}
-    (<em>${esc(cheapest.plant)}</em>). Das drückt die Preise: Median ${eur(median(carnosa.map((o) => o.net)))} gegenüber
-    ${eur(median(others.map((o) => o.net)))} bei den übrigen Arten.`;
+  $('carnosa').innerHTML = `<span class="big">${pct(carnosa.length / FA.length)}</span>der Angebote sind Carnosa-artig
+    (${carnosa.length} von ${FA.length}). Die Auswahl ist kleiner, als die Zahl der Angebote vermuten lässt.`;
 
-  const rows = tops.flatMap((id) => [id, ...subsOf(id).map((s) => s.id)]).map((id) => {
-    const g = groups[id];
-    const f = median(FA.filter((o) => inGroup(o, id)).map((o) => o.net));
-    const b = median(BJ.filter((o) => inGroup(o, id)).map((o) => o.price));
-    return `<tr><td>${g.parent ? '&nbsp;└ ' + esc(g.name) : esc(g.name)}</td><td class="n">${eur(f)}</td><td class="n retail-only">${b != null ? eur(b) : '–'}</td></tr>`;
+  $('lead').innerHTML = `FlorAccess hat viele Hoyas, aber nicht das, was unsere Händler ab 2027 suchen. Es gibt dort eine
+    Mindestbestellung von 800 €, im Kern Carnosa und Kerrii, und ${third} des Bestands sind Einzelblätter.<br><br>
+    Die selteneren Arten kosten dort im Median ${eur(median(others.map((o) => o.net)))} netto, unsere Herstellungskosten liegen bei
+    3,20 € (2,50 € bei voller Auslastung). <span class="todo">[X von Y]</span> unserer geplanten Arten führt FlorAccess nicht oder nur über 8 €.<br><br>
+    Die Analysesoftware, die mit diesem Bericht in Betrieb gegangen ist, nutzen wir ab jetzt für die Sortimentsplanung.`;
+
+  const medRows = tops.flatMap((id) => [id, ...subsOf(id).map((s) => s.id)])
+    .map((id) => ({ id, g: groups[id], v: median(FA.filter((o) => inGroup(o, id)).map((o) => o.net)) }))
+    .filter((r) => r.v != null).sort((a, b) => b.v - a.v);
+  const medChart = echarts.init($('medians'), null, { renderer: 'svg' });
+  medChart.setOption({
+    animation: false, textStyle: { fontFamily: 'system-ui, sans-serif' },
+    grid: { left: 4, right: 52, top: 4, bottom: 4, containLabel: true },
+    xAxis: { type: 'value', show: false },
+    yAxis: { type: 'category', inverse: false, data: medRows.map((r) => (r.g.parent ? r.g.name : r.g.name)),
+      axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: css('--ink-2'), fontSize: 12 } },
+    series: [{ type: 'bar', barWidth: '62%', data: medRows.map((r) => ({ value: r.v, itemStyle: { color: r.g.color, borderRadius: [0, 3, 3, 0] } })),
+      label: { show: true, position: 'right', formatter: (p) => eur(p.value), color: css('--ink'), fontSize: 12 } }],
+    tooltip: { show: false },
   });
-  $('medians').innerHTML = `<tr><th></th><th class="n">FlorAccess<br>netto</th><th class="n retail-only">Ben's Jungle<br>inkl. MwSt.</th></tr>${rows.join('')}`;
+  new ResizeObserver(() => medChart.resize()).observe($('medians'));
 
   // ---------- wholesale vs retail ----------
   const byPlant = (xs) => xs.reduce((m, o) => ((m[o.plant_key] ??= []).push(o), m), {});
@@ -330,12 +340,10 @@
   }).sort((a, b) => b.factor - a.factor);
   const EXAMPLES = ['Hoya mirabilis', "Hoya 'Rosita'", "Hoya kerrii 'Splash'"];
   const ex = EXAMPLES.map((n) => pairs.find((p) => p.plant === n)).filter(Boolean);
-  const bp = FA.filter((o) => /fitchii|soligamiana|wibergiae/i.test(o.plant) && /^9 cm/.test(o.pot ?? ''));
+  const bp = FA.filter((o) => /fitchii|soligamiana/i.test(o.plant) && /^9 cm/.test(o.pot ?? ''));
   const bpNames = [...new Set(bp.map((o) => o.plant))].map((n) => `<em>${esc(n)}</em>`);
-  $('prices').innerHTML = `FlorAccess verkauft nur an Händler (Mindestbestellung 800 €), alle Preise netto. Für den Händlerkanal
-    zählt dieser Vergleich: ${bpNames.join(' und ')} kosten bei FlorAccess ${eur(bp[0]?.net)} im 9-cm-Topf, also weniger als
-    der Händlerpreis von 8 € im Businessplan (Kap. 6.4). Im Endkundengeschäft gelten andere Preise; dort verkaufen sich auch Arten,
-    die FlorAccess günstiger hat: ${ex.map((p) => `<em>${esc(p.plant)}</em> ${eur(p.f.net)} bei FlorAccess, ${eur(p.b.price)} bei Ben's Jungle`).join('; ')}.`;
+  $('prices').innerHTML = `Im Verkauf an Händler zählt der Großhandelspreis. ${bpNames.join(' und ')} gibt es bei FlorAccess für
+    ${eur(bp[0]?.net)} im 9-cm-Topf, das liegt unter unserem Händlerpreis von 8 €.`;
 
   // ---------- origin ----------
   const O = data.origin;
@@ -344,11 +352,9 @@
   const pick = (n) => O.find((r) => r.name === n);
   const exO = [["Hoya 'Lai Chau'", 'Fundort in Vietnam'], ['Hoya Sp Padang Sidempuan', 'Fundort auf Sumatra'],
     ["Hoya callistophylla 'KAL 16'", 'Sammelnummer']].filter(([n]) => pick(n));
-  $('origin').innerHTML = `Bei <strong>${O.length} der ${FA.length} Angebote</strong> ist ein Import oder eine Wildentnahme denkbar.
-    Das ist ein Indiz aus Name, Format und Preis, kein Befund: Bei ${imp} deuten Fundort, Sammelnummer oder asiatischer Handelsname
-    auf einen Import hin, bei ${wild} ist eine Wildentnahme nicht auszuschließen. Beispiele:
-    ${exO.map(([n, why]) => `<em>${esc(n)}</em> (${why})`).join(', ')}.`;
-  $('origin-sum').textContent = `Alle ${O.length} Angebote mit möglichem Import oder Wildentnahme`;
+  $('origin').innerHTML = `Bei <strong>${O.length} von ${FA.length} Angeboten</strong> deuten Name, Format oder Preis auf einen Import
+    oder eine Wildentnahme hin. Das ist ein Indiz, kein Befund.`;
+  $('origin-sum').textContent = `Alle ${O.length} Angebote`;
   const KIND = (r) => (/^(Fundort|Sammelnummer)/.test(r.hint) ? 'Fundort- oder Sammelform' : /Reinart/.test(r.hint) ? 'Reinart ohne Herkunftsangabe' : 'Asiatischer Handelsname');
   const kinds = ['Alle', 'Fundort- oder Sammelform', 'Asiatischer Handelsname', 'Reinart ohne Herkunftsangabe'];
   let kind = 'Alle';
@@ -375,11 +381,9 @@
   originTable();
 
   // ---------- method ----------
-  $('method').textContent = `Gezählt sind alle Hoya-Angebote vom ${new Date(data.day).toLocaleDateString('de-DE')}, die eindeutig einer
-    Art oder Sorte zugeordnet sind: ${FA.length} bei FlorAccess, ${BJ.length} bei Ben's Jungle. Nicht gezählt sind Mischungen wie
-    „Hoya MIX“ und „Hoya kerrii MIX“ (22 Angebote bei FlorAccess). Sorten und Formen zählen zu ihrer Art. Preise in Euro, FlorAccess netto,
-    Ben's Jungle inkl. 7 % MwSt.; Lagerwert = Bestand × Nettopreis. Gruppen und Einzelblatt-Zuordnung: GeniScent, nach Art und Foto.
-    Herkunftseinschätzung: eigene Recherche vom 18.11.2026.`;
+  $('method').textContent = `Stand ${new Date(data.day).toLocaleDateString('de-DE')}. Gezählt sind Angebote, die sich eindeutig einer
+    Art oder Sorte zuordnen lassen (FlorAccess ${FA.length}, Ben's Jungle ${BJ.length}), ohne Mischungen. Die Gruppen und die Einzelblätter
+    haben wir selbst nach Art und Foto zugeordnet. Der Preisverlauf stammt aus archivierten FlorAccess-Seiten im Internet Archive.`;
 
   // ---------- retail switch ----------
   const sw = $('retail');

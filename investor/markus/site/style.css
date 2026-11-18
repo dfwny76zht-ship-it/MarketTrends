@@ -76,6 +76,8 @@ body.retail .flow .chart { height: 210px; }
 .card { transition: background-color .15s, box-shadow .15s; }
 .card[data-group] { border-width: 2px; border-color: var(--gc); }
 .card.hl { background: color-mix(in srgb, var(--gc) 14%, #fff); box-shadow: 0 0 0 2px var(--gc); }
+.sub { font-size: 12px; color: var(--muted); margin: -2px 0 4px; }
+.medchart { height: 150px; }
 .big { font-size: 22px; font-weight: 650; display: block; line-height: 1.2; }
 
 .block { margin-bottom: 14px; }
