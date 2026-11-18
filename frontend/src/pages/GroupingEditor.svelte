@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { filterParams, meta, loadMeta, setGroupings } from '../lib/state.svelte.js';
+  import { filterParams, meta, loadMeta, setGroupings, chartPanel } from '../lib/state.svelte.js';
   import { cssVar, slotColor, fmtEur, fmtInt, qs } from '../lib/viz.js';
   import FilterBar from '../components/FilterBar.svelte';
   import Chart from '../components/Chart.svelte';
@@ -29,6 +29,7 @@
     try {
       const r = await api('/groupings', { method: 'POST', body: { name: newName, start } });
       setGroupings(r.groupings);
+      chartPanel.by = String(r.id);
       location.replace(`#/groupings/${r.id}`);
     } catch (err) {
       error = err.message;

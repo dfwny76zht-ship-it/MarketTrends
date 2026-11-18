@@ -187,6 +187,13 @@
     };
   }
 
+  function pickBy(e) {
+    if (e.target.value === '__new') {
+      e.target.value = chartPanel.by;
+      location.hash = '#/groupings/new';
+    } else chartPanel.by = e.target.value;
+  }
+
   function onPick(p) {
     const gid = p?.data?.gid ?? p?.seriesId;
     if (!gid || gid === 'other') return;
@@ -222,10 +229,12 @@
     </div>
     <div class="block">
       <span class="block-label">Group by</span>
-      <select class="pick" bind:value={chartPanel.by} aria-label="Group by">
+      <select class="pick" value={chartPanel.by} aria-label="Group by" onchange={pickBy}>
         {#each meta.groupings as g (g.id)}<option value={String(g.id)}>{g.name}</option>{/each}
         <option value="top">Top species</option>
         <option value="shop">Shop</option>
+        <option disabled>──────────</option>
+        <option value="__new">＋ New grouping…</option>
       </select>
     </div>
     <div class="block">
@@ -246,7 +255,6 @@
       {:else if grouping?.kind === 'manual'}
         <a class="link" href="#/groupings/{grouping.id}">Edit {grouping.name}</a>
       {/if}
-      <a class="link" href="#/groupings/new">＋ New grouping</a>
     </div>
   </div>
 
