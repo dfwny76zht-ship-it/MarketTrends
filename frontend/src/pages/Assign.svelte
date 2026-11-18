@@ -134,6 +134,11 @@
                 Confirm
               </button>
             {/if}
+            {#if s.species && s.cultivar}
+              <button disabled={busyKey === g.key} onclick={() => send(g.key, { ...payloadFromSuggestion(g), cultivar_id: null, new_cultivar: null, kind: null })}>
+                Only <em>{s.species}</em>
+              </button>
+            {/if}
             <button onclick={() => (editing = editing === g.key ? null : g.key)}>Change</button>
             <button disabled={busyKey === g.key} onclick={() => send(g.key, { ignore: true })}>Not a single plant</button>
           </td>
