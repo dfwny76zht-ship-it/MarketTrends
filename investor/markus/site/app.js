@@ -60,12 +60,12 @@
   const tile = (l, v, r = '') => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div>${r ? `<div class="r">${r}</div>` : ''}</div>`;
   const bjr = (v) => `<span class="retail-only">Ben's Jungle: ${v}</span>`;
   $('tiles').innerHTML =
+    tile('Medianpreis', eur(median(FA.map((o) => o.net))) + '<small style="font-size:12px;font-weight:400"> netto</small>',
+      bjr(`${eur(median(BJ.map((o) => o.price)))} inkl. MwSt.`)) +
     tile('Arten', species(FA), bjr(species(BJ))) +
     tile('Angebote', FA.length, bjr(BJ.length)) +
     tile('Pflanzen im Bestand', nf0.format(stockAll), bjr('nicht veröffentlicht')) +
-    tile('Lagerwert (netto)', eur0(valueAll), bjr('–')) +
-    tile('Medianpreis', eur(median(FA.map((o) => o.net))) + '<small style="font-size:12px;font-weight:400"> netto</small>',
-      bjr(`${eur(median(BJ.map((o) => o.price)))} inkl. MwSt.`));
+    tile('Lagerwert (netto)', eur0(valueAll), bjr('–'));
 
   // ---------- donuts ----------
   const charts = {};
@@ -299,7 +299,7 @@
   const leafShareAll = leafStock / stockAll;
   const third = Math.abs(leafShareAll - 1 / 3) < 0.03 ? 'ein Drittel' : pct(leafShareAll);
   $('kerrii').innerHTML = `<span class="big">${pct(leafStock / kerriiStock)}</span>der Kerrii-Pflanzen sind Einzelblätter ohne Knoten,
-    das ist ${third} des gesamten Hoya-Bestands. Aus einem Einzelblatt wird fast nie eine Pflanze.`;
+    das ist ${third} des gesamten Hoya-Bestands. <strong>Aus einem Einzelblatt wird fast nie eine Pflanze.</strong>`;
 
   const carnosa = FA.filter((o) => topOf(o) === carnosaId);
   const others = FA.filter((o) => topOf(o) === 'other');
@@ -307,10 +307,22 @@
   $('carnosa').innerHTML = `<span class="big">${pct(carnosa.length / FA.length)}</span>der Angebote sind Carnosa-artig
     (${carnosa.length} von ${FA.length}). Die Auswahl ist kleiner, als die Zahl der Angebote vermuten lässt.`;
 
+  // Our planned species = the species in GeniScent's stock ("Hoya Bestand November 2026", one entry per
+  // species; unclear "Mystery" and "Elephant" plants left out). Counted when FlorAccess has no offer of
+  // that species (any form or cultivar) at 8 € net or less on the snapshot day.
+  const OUR_SPECIES = ['australis', ['bella', 'lanceolata'], 'burtoniae', 'callistophylla', 'calycina', 'carnosa', 'caudata',
+    'clemensiorum', 'cumingiana', 'curtisii', 'davidcummingii', 'erythrina', 'fitchii', 'fungii', 'fuscomarginata', 'heuschkeliana',
+    'icensis', 'imperialis', 'kentiana', 'kerrii', 'kloppenburgii', 'krohniana', 'linearis', 'macgregorii', 'mathilde', 'mirabilis',
+    'nummularioides', 'obovata', ['parasitica'], 'paxtonii', 'pubicalyx', 'retusa', 'serpens', 'shepherdii', 'sigillatis', 'undulata',
+    ['wayetii', 'wayettii'], 'wightii'];
+  const hasCheap = (keys) => FA.some((o) => o.net <= 8 && [].concat(keys).some((k) =>
+    new RegExp(`\\b${k}\\b`, 'i').test(`${o.plant} ${o.name}`)));
+  const gapCount = OUR_SPECIES.filter((k) => !hasCheap(k)).length;
+
   $('lead').innerHTML = `FlorAccess hat viele Hoyas, aber nicht das, was unsere Händler ab 2027 suchen. Es gibt dort eine
     Mindestbestellung von 800 €, im Kern Carnosa und Kerrii, und ${third} des Bestands sind Einzelblätter.<br><br>
     Die selteneren Arten kosten dort im Median ${eur(median(others.map((o) => o.net)))} netto, unsere Herstellungskosten liegen bei
-    3,20 € (2,50 € bei voller Auslastung). <span class="todo">[X von Y]</span> unserer geplanten Arten führt FlorAccess nicht oder nur über 8 €.<br><br>
+    3,20 € (2,50 € bei voller Auslastung). ${gapCount} von ${OUR_SPECIES.length} unserer geplanten Arten führt FlorAccess nicht oder nur über 8 €.<br><br>
     Die Analysesoftware, die mit diesem Bericht in Betrieb gegangen ist, nutzen wir ab jetzt für die Sortimentsplanung.`;
 
   const medRows = tops.flatMap((id) => [id, ...subsOf(id).map((s) => s.id)])
