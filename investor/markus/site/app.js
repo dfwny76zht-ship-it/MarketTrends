@@ -94,7 +94,9 @@
           p.rest = (p.rest ?? p.v) - v;
         }
         const rest = p.rest ?? p.v;
-        if (rest > 0) inner.push({ name: '', value: rest, itemStyle: { color: 'transparent' }, tooltip: { show: false }, emphasis: { disabled: true } });
+        // Transparent filler over the rest of the group's slice: acts like the group itself on hover/click.
+        if (rest > 0) inner.push({ name: '', value: rest, gid: p.id, rest: outer.indexOf(p), itemStyle: { color: 'transparent' },
+          tooltip: { show: false }, emphasis: { disabled: true } });
         acc += rest;
       }
       const w = chart.getWidth();
@@ -143,7 +145,7 @@
             data: outer.map((p) => ({ name: groups[p.id].name, value: p.v, gid: p.id, label: { color: textOn(groups[p.id].color) },
               itemStyle: { color: groups[p.id].color, opacity: !selected || selected === p.id || groups[selected]?.parent === p.id ? 1 : 0.35 } })) },
           { type: 'pie', radius: [`${r0}%`, `${r0 + 0.6 * (r1 - r0)}%`], center: ['50%', '50%'], label: { show: false },
-            labelLine: { show: false }, emphasis: { scale: false }, data: inner },
+            labelLine: { show: false }, emphasis: { scale: false }, z: 3, data: inner },
         ],
       }, true);
     };
@@ -215,8 +217,23 @@
       const name = groups[top]?.name ?? '';
       return document.querySelector(`.card[data-group="${/^Kerrii/.test(name) ? 'kerrii' : /^Carnosa/.test(name) ? 'carnosa' : ''}"]`);
     };
-    chart.on('mouseover', (p) => p.data?.gid != null && cardFor(p.data.gid)?.classList.add('hl'));
-    chart.on('mouseout', () => document.querySelectorAll('.card.hl').forEach((c) => c.classList.remove('hl')));
+    let off = null;
+    chart.on('mouseover', (p) => {
+      cancelAnimationFrame(off);
+      document.querySelectorAll('.card.hl').forEach((c) => c.classList.remove('hl'));
+      if (p.data?.gid != null) cardFor(p.data.gid)?.classList.add('hl');
+      if (p.data?.rest != null) {
+        chart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: p.data.rest });
+        chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: p.data.rest });
+      }
+    });
+    chart.on('mouseout', (p) => {
+      if (p.data?.rest != null) {
+        chart.dispatchAction({ type: 'downplay', seriesIndex: 0, dataIndex: p.data.rest });
+        chart.dispatchAction({ type: 'hideTip' });
+      }
+      off = requestAnimationFrame(() => document.querySelectorAll('.card.hl').forEach((c) => c.classList.remove('hl')));
+    });
   }
   function tint(hex, amount) {
     const n = parseInt(hex.replace('#', ''), 16);
