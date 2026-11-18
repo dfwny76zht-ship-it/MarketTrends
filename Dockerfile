@@ -13,6 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY db/migrations ./migrations
 COPY --from=web /web/dist ./static
-RUN useradd --system --no-create-home app
+RUN useradd --system --no-create-home app && mkdir -p /data/snapshots && chown app /data/snapshots
 USER app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

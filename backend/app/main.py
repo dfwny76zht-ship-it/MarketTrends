@@ -6,19 +6,18 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, checks, config, migrate, shops
+from . import auth, collect, config, migrate, shops
 from .db import pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 scheduler = BackgroundScheduler(timezone=config.TIMEZONE)
 scheduler.add_job(
-    checks.run_robots,
+    collect.nightly,
     "cron",
     hour=3,
     minute=0,
-    kwargs={"notify": True},
-    id="nightly_robots",
+    id="nightly",
     coalesce=True,
     misfire_grace_time=3600,
 )

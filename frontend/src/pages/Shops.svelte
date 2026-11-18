@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { STATUSES, TYPES, ROBOTS, when, tone } from '../lib/labels.js';
+  import { STATUSES, TYPES, ROBOTS, RESULTS, when, tone } from '../lib/labels.js';
   import ShopProfile from './ShopProfile.svelte';
 
   let shops = $state([]);
@@ -52,6 +52,7 @@
     ['name', 'Name'],
     ['type', 'Type'],
     ['status', 'Status'],
+    ['offers_count', 'Offers'],
     ['robots_result', 'robots.txt'],
     ['last_run_at', 'Last run'],
   ];
@@ -157,6 +158,7 @@
               </td>
               <td>{TYPES[s.type] ?? ''}</td>
               <td><span class="badge {statusTone(s.status)}">{STATUSES[s.status]}</span></td>
+              <td class="num">{s.adapter ? s.offers_count : ''}</td>
               <td>
                 {#if s.robots_result}
                   <span class="badge {tone(s.robots_result)}">{ROBOTS[s.robots_result] ?? s.robots_result}</span>
@@ -180,8 +182,8 @@
 
 <style>
   .layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
-  .layout.with-panel { grid-template-columns: minmax(0, 1fr) 440px; }
-  @media (max-width: 900px) {
+  .layout.with-panel { grid-template-columns: minmax(0, 1fr) 560px; }
+  @media (max-width: 1100px) {
     .layout.with-panel { grid-template-columns: minmax(0, 1fr); }
   }
 
@@ -226,5 +228,6 @@
   .name { font-weight: 600; }
   .host { font-size: 13px; }
   .nowrap { white-space: nowrap; }
+  .num { text-align: right; }
   .problem { color: var(--bad); font-size: 14px; }
 </style>

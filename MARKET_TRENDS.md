@@ -99,6 +99,7 @@ The results feed into our range, prices and market arguments.
   - Ticking rows in the table or the search compares those species and cultivars on top of each other.
   - The metric is selectable: price, availability, quantity or events.
   - The window can be docked, resized, collapsed and maximised, and stays open when switching pages.
+- **Price vs. quantity chart** (requested 2026-11-18, build when the analysis is built in step 4 or once enough quantity data exists): scatter chart with price on the x axis and quantity on the y axis. One point per species **per shop** (the same species in two shops = two points), only where both values exist. Filterable by species, shop and size class; hovering a point shows species, shop, price, quantity and date.
 - A watchlist of species for which events are reported (see 10).
 - Tables can be sorted and filtered, show small trend charts and export as CSV.
 - Every value shows its origin: shop, time, live or archive. Missing values stay empty and are not estimated.

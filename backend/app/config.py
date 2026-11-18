@@ -12,3 +12,6 @@ TIMEZONE = "Europe/Berlin"
 
 USER_AGENT = "MarketTrends/0.1"
 REQUEST_GAP_SECONDS = 5
+
+SNAPSHOT_DIR = os.environ.get("SNAPSHOT_DIR", "/data/snapshots")
+MIN_GAP_SECONDS = 5

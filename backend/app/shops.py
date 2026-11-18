@@ -7,7 +7,7 @@ from psycopg.errors import UniqueViolation
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
-from . import checks
+from . import checks, collect
 from .auth import current_user
 from .db import pool
 
@@ -18,11 +18,16 @@ ShopStatus = Literal["suggested", "in_setup", "active", "paused", "not_allowed",
 PROVIDES_KEYS = ("price", "availability", "quantity", "pot_size")
 
 LIST_SQL = """
-SELECT s.*, r.started_at AS last_run_at, r.finished_at AS last_run_finished_at,
+SELECT s.*,
+       (SELECT count(*) FROM listings l WHERE l.shop_id = s.id AND l.gone_since IS NULL) AS offers_count,
+       EXISTS (SELECT 1 FROM runs c WHERE c.shop_id = s.id AND c.kind = 'collect'
+               AND (c.started_at AT TIME ZONE 'Europe/Berlin')::date = (now() AT TIME ZONE 'Europe/Berlin')::date)
+           AS collected_today,
+       r.kind AS last_run_kind, r.started_at AS last_run_at, r.finished_at AS last_run_finished_at,
        r.result AS last_run_result, r.error AS last_run_error
 FROM shops s
 LEFT JOIN LATERAL (
-    SELECT started_at, finished_at, result, error FROM runs
+    SELECT kind, started_at, finished_at, result, error FROM runs
     WHERE shop_id = s.id ORDER BY started_at DESC LIMIT 1
 ) r ON true
 """
@@ -77,7 +82,8 @@ def get_shop(shop_id: int):
     with pool.connection() as conn:
         shop = _get(conn, shop_id)
         runs = conn.execute(
-            "SELECT id, kind, started_at, finished_at, result, http_status, error FROM runs"
+            "SELECT id, kind, started_at, finished_at, result, http_status, error, offers_found, events_found,"
+            " pages, details FROM runs"
             " WHERE shop_id = %s ORDER BY started_at DESC LIMIT 20",
             (shop_id,),
         ).fetchall()
@@ -96,6 +102,7 @@ class ShopPatch(BaseModel):
     provides: dict[str, bool] | None = None
     note: str | None = None
     terms_checked_at: dt.date | None = None
+    vat_rate: float | None = None
 
 
 @router.patch("/{shop_id}")
@@ -105,8 +112,11 @@ def update_shop(shop_id: int, body: ShopPatch):
         raise HTTPException(422, "Name can't be empty.")
     if changes.get("status") is None:
         changes.pop("status", None)
-    if changes.get("access") is None:
-        changes.pop("access", None)
+    for key in ("access", "vat_rate"):
+        if key in changes and changes[key] is None:
+            changes.pop(key)
+    if "vat_rate" in changes and not 0 <= changes["vat_rate"] <= 30:
+        raise HTTPException(422, "VAT rate must be between 0 and 30.")
     if "url" in changes:
         changes["url"], changes["host"] = normalize_url(changes["url"] or "")
     for key in ("country", "currency"):
@@ -136,5 +146,37 @@ def update_shop(shop_id: int, body: ShopPatch):
 def check_now(shop_id: int):
     with pool.connection() as conn:
         _get(conn, shop_id)
-    checks.start_in_background(shop_id)
+    checks.check_in_background(shop_id)
     return {"started": True}
+
+
+@router.post("/{shop_id}/run", status_code=202)
+def run_now(shop_id: int):
+    with pool.connection() as conn:
+        shop = _get(conn, shop_id)
+    if not shop["adapter"]:
+        raise HTTPException(409, "This shop has no adapter yet.")
+    if shop["collected_today"]:
+        raise HTTPException(409, "Already collected today.")
+    collect.collect_in_background(shop_id)
+    return {"started": True}
+
+
+OFFERS_SQL = """
+SELECT l.id, l.item_no, l.name, l.url, l.image_url, l.first_seen, l.last_seen, l.gone_since,
+       o.price, o.currency, o.price_basis, o.price_eur_net, o.availability, o.availability_text,
+       o.quantity, o.pot_size, o.plant_size, o.tier_prices, o.observed_at
+FROM listings l
+LEFT JOIN LATERAL (
+    SELECT * FROM observations WHERE listing_id = l.id ORDER BY observed_at DESC LIMIT 1
+) o ON true
+WHERE l.shop_id = %s
+ORDER BY l.gone_since IS NOT NULL, lower(l.name)
+"""
+
+
+@router.get("/{shop_id}/offers")
+def list_offers(shop_id: int):
+    with pool.connection() as conn:
+        _get(conn, shop_id)
+        return conn.execute(OFFERS_SQL, (shop_id,)).fetchall()

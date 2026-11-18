@@ -1,4 +1,4 @@
-"""robots.txt check: the first real run. One request per shop, 5 s apart."""
+"""robots.txt check. Used on its own for shops without an adapter, and before every collection run."""
 
 import logging
 import threading
@@ -8,12 +8,13 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from . import config, ntfy
+from . import config
 from .db import pool
 
 log = logging.getLogger("checks")
 
-_run_lock = threading.Lock()
+# One run at a time across the whole tool (robots checks and collection runs).
+run_lock = threading.Lock()
 _last_request = 0.0
 
 
@@ -23,18 +24,14 @@ def _wait_for_gap() -> None:
         time.sleep(gap)
 
 
-def check_robots(url: str) -> dict:
+def fetch_robots(url: str) -> dict:
+    """Returns result, http_status, error, and for collection: parser (None = allow all) and crawl_delay."""
     global _last_request
     parts = urlsplit(url)
     robots_url = f"{parts.scheme}://{parts.netloc}/robots.txt"
     _wait_for_gap()
     try:
-        resp = httpx.get(
-            robots_url,
-            headers={"User-Agent": config.USER_AGENT},
-            timeout=20,
-            follow_redirects=True,
-        )
+        resp = httpx.get(robots_url, headers={"User-Agent": config.USER_AGENT}, timeout=20, follow_redirects=True)
     except httpx.HTTPError as exc:
         return {"result": "error", "http_status": None, "error": f"{type(exc).__name__}: {exc}"}
     finally:
@@ -44,59 +41,61 @@ def check_robots(url: str) -> dict:
     if status in (403, 429):
         return {"result": "blocked", "http_status": status, "error": f"robots.txt answered {status}"}
     if status in (404, 410):
-        return {"result": "no_robots", "http_status": status, "error": None}
+        return {"result": "no_robots", "http_status": status, "error": None, "parser": None, "crawl_delay": None}
     if status >= 400:
         return {"result": "error", "http_status": status, "error": f"robots.txt answered {status}"}
 
     parser = robotparser.RobotFileParser()
     parser.parse(resp.text.splitlines())
+    delay = parser.crawl_delay(config.USER_AGENT)
+    delay = float(delay) if delay else None
     if not parser.can_fetch(config.USER_AGENT, url):
         return {"result": "disallowed", "http_status": status, "error": "robots.txt disallows the shop URL"}
-    delay = parser.crawl_delay(config.USER_AGENT)
-    note = f"crawl-delay {delay} s" if delay else None
-    return {"result": "allowed", "http_status": status, "error": note}
+    return {
+        "result": "allowed",
+        "http_status": status,
+        "error": f"crawl-delay {delay:g} s" if delay else None,
+        "parser": parser,
+        "crawl_delay": delay,
+    }
 
 
-def run_robots(shop_ids: list[int] | None = None, notify: bool = False) -> None:
-    """Nightly: all shops except paused / not allowed. Manual: the given shops, any status."""
-    with _run_lock:
-        with pool.connection() as conn:
-            if shop_ids:
-                shops = conn.execute(
-                    "SELECT id, name, url FROM shops WHERE id = ANY(%s) ORDER BY id", (shop_ids,)
-                ).fetchall()
-            else:
-                shops = conn.execute(
-                    "SELECT id, name, url FROM shops"
-                    " WHERE status NOT IN ('paused', 'not_allowed') ORDER BY id"
-                ).fetchall()
+def record_robots(shop_id: int, res: dict) -> None:
+    with pool.connection() as conn:
+        conn.execute(
+            "UPDATE shops SET robots_checked_at = now(), robots_result = %s, crawl_delay = %s WHERE id = %s",
+            (res["result"], res.get("crawl_delay"), shop_id),
+        )
 
-        problems = []
-        for shop in shops:
+
+def robots_one(shop: dict) -> str | None:
+    """robots.txt check as its own run. Returns a problem text for ntfy, or None."""
+    with pool.connection() as conn:
+        run_id = conn.execute(
+            "INSERT INTO runs (shop_id, kind) VALUES (%s, 'robots') RETURNING id", (shop["id"],)
+        ).fetchone()["id"]
+    try:
+        res = fetch_robots(shop["url"])
+    except Exception as exc:  # never leave a run open
+        log.exception("robots check crashed for %s", shop["name"])
+        res = {"result": "error", "http_status": None, "error": f"{type(exc).__name__}: {exc}"}
+    with pool.connection() as conn:
+        conn.execute(
+            "UPDATE runs SET finished_at = now(), result = %s, http_status = %s, error = %s WHERE id = %s",
+            (res["result"], res["http_status"], res["error"], run_id),
+        )
+    record_robots(shop["id"], res)
+    if res["result"] in ("blocked", "disallowed", "error"):
+        return f"{shop['name']}: {res['error'] or res['result']}"
+    return None
+
+
+def check_in_background(shop_id: int) -> None:
+    def work():
+        with run_lock:
             with pool.connection() as conn:
-                run_id = conn.execute(
-                    "INSERT INTO runs (shop_id, kind) VALUES (%s, 'robots') RETURNING id", (shop["id"],)
-                ).fetchone()["id"]
-            try:
-                res = check_robots(shop["url"])
-            except Exception as exc:  # never leave a run open
-                log.exception("robots check crashed for %s", shop["name"])
-                res = {"result": "error", "http_status": None, "error": f"{type(exc).__name__}: {exc}"}
-            with pool.connection() as conn:
-                conn.execute(
-                    "UPDATE runs SET finished_at = now(), result = %s, http_status = %s, error = %s WHERE id = %s",
-                    (res["result"], res["http_status"], res["error"], run_id),
-                )
-                conn.execute(
-                    "UPDATE shops SET robots_checked_at = now(), robots_result = %s WHERE id = %s",
-                    (res["result"], shop["id"]),
-                )
-            if res["result"] in ("blocked", "disallowed", "error"):
-                problems.append(f"{shop['name']}: {res['error'] or res['result']}")
+                shop = conn.execute("SELECT id, name, url FROM shops WHERE id = %s", (shop_id,)).fetchone()
+            if shop:
+                robots_one(shop)
 
-        if notify and problems:
-            ntfy.send("Market Trends: robots.txt check", "\n".join(problems), tags=["warning"])
-
-
-def start_in_background(shop_id: int) -> None:
-    threading.Thread(target=run_robots, args=([shop_id],), daemon=True).start()
+    threading.Thread(target=work, daemon=True).start()

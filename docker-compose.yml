@@ -24,9 +24,12 @@ services:
       DATABASE_URL: postgresql://markettrends:${POSTGRES_PASSWORD}@db:5432/markettrends
     ports:
       - "127.0.0.1:8090:8000"
+    volumes:
+      - snapshots:/data/snapshots
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
+  snapshots:
