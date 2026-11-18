@@ -18,7 +18,7 @@
   const remembered = new Map();
   const slotOf = $derived.by(() => {
     const ids = (data?.groups ?? []).filter((g) => g.id !== 'other').map((g) => g.id);
-    if (chartPanel.by !== 'top') return Object.fromEntries(ids.map((id, i) => [id, i]));
+    if (!['top', 'offer'].includes(chartPanel.by)) return Object.fromEntries(ids.map((id, i) => [id, i]));
     const out = {};
     const used = new Set();
     for (const id of ids) {
@@ -44,7 +44,7 @@
   // Default "group by": the first grouping (Price).
   $effect(() => {
     if (!meta.loaded || !meta.groupings.length) return;
-    const valid = ['top', 'shop', ...meta.groupings.map((g) => String(g.id))];
+    const valid = ['top', 'offer', 'shop', ...meta.groupings.map((g) => String(g.id))];
     if (!valid.includes(chartPanel.by)) {
       const price = meta.groupings.find((g) => g.kind === 'price') ?? meta.groupings[0];
       chartPanel.by = String(price.id);
@@ -75,7 +75,7 @@
   }
 
   $effect(() => {
-    if (!chartPanel.by || (!['top', 'shop'].includes(chartPanel.by) && !grouping)) return;
+    if (!chartPanel.by || (!['top', 'offer', 'shop'].includes(chartPanel.by) && !grouping)) return;
     load({
       ...filterParams(),
       level: filters.level,
@@ -300,7 +300,7 @@
 
   function onPick(p) {
     const gid = p?.data?.gid ?? p?.seriesId;
-    if (!gid || gid === 'other') return;
+    if (!gid || gid === 'other' || chartPanel.by === 'offer') return;
     if (chartPanel.by === 'top') location.hash = `#/taxon/${gid}`;
     else if (chartPanel.by === 'shop') filters.shops = [Number(gid)];
     else {
@@ -335,7 +335,8 @@
       <span class="block-label">Group by</span>
       <select class="pick" value={chartPanel.by} aria-label="Group by" onchange={pickBy}>
         {#each meta.groupings as g (g.id)}<option value={String(g.id)}>{g.name}</option>{/each}
-        <option value="top">Top species</option>
+        <option value="top">Species</option>
+        <option value="offer">Offer</option>
         <option value="shop">Shop</option>
         <option disabled>──────────</option>
         <option value="__new">＋ New grouping…</option>
@@ -399,7 +400,7 @@
         <table class="data-table compact">
           <thead>
             <tr>
-              <th>{chartPanel.by === 'top' ? 'Species' : chartPanel.by === 'shop' ? 'Shop' : grouping?.name ?? ''}</th>
+              <th>{chartPanel.by === 'top' ? 'Species' : chartPanel.by === 'offer' ? 'Offer' : chartPanel.by === 'shop' ? 'Shop' : grouping?.name ?? ''}</th>
               {#each panels as p (p.id)}
                 <th class="num">{p.name || MEASURES.find((m) => m[0] === chartPanel.measure)[1]}</th>
                 {#if data.additive}<th class="num">%</th>{/if}

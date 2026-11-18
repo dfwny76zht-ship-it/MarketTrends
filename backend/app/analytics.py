@@ -76,7 +76,7 @@ def _num(v):
 @router.get("/shops")
 def shop_list():
     with pool.connection() as conn:
-        return conn.execute("SELECT id, name FROM shops WHERE adapter IS NOT NULL ORDER BY id").fetchall()
+        return conn.execute("SELECT id, name FROM shops s WHERE adapter IS NOT NULL OR EXISTS (SELECT 1 FROM listings l WHERE l.shop_id = s.id) ORDER BY id").fetchall()
 
 
 # ---------- overview ----------
@@ -109,7 +109,7 @@ def overview(days: int = 28, shops: list[int] | None = Query(None), size: str | 
             [shops] if shops else None,
         ).fetchone()["n"]
         shop_list = conn.execute(
-            "SELECT id, name FROM shops WHERE adapter IS NOT NULL ORDER BY id"
+            "SELECT id, name FROM shops s WHERE adapter IS NOT NULL OR EXISTS (SELECT 1 FROM listings l WHERE l.shop_id = s.id) ORDER BY id"
         ).fetchall()
     by_kind: dict[str, dict] = defaultdict(dict)
     for e in events:
@@ -330,7 +330,7 @@ def breakdown(by: str = "top", measure: str = "offers", mode: str = "snapshot", 
               level: str = "species", days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
               scope: str = "period", types: list[str] | None = Query(None), group: list[int] | None = Query(None),
               top: int = 5, sub: bool = False):
-    """by: 'top' (top species), 'shop', or a grouping id. mode: 'snapshot' (each offer's latest observation)
+    """by: 'top' (species), 'offer', 'shop', or a grouping id. mode: 'snapshot' (each offer's latest observation)
     or 'series' (per day). split: one panel per shop."""
     if measure not in MEASURES:
         raise HTTPException(422, "Unknown measure.")
@@ -353,6 +353,8 @@ def breakdown(by: str = "top", measure: str = "offers", mode: str = "snapshot", 
             g_sql, n_sql = _key(level), _name(level)
         elif by == "shop":
             g_sql, n_sql = "l.shop_id::text", "sh.name"
+        elif by == "offer":
+            g_sql, n_sql = "l.id::text", "sh.name || ': ' || l.name"
         else:
             try:
                 gid = int(by)
