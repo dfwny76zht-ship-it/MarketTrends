@@ -59,7 +59,9 @@
 
   const tip = () => ({ backgroundColor: cssVar('--viz-surface'), borderColor: cssVar('--viz-axis'),
     textStyle: { color: cssVar('--viz-ink'), fontSize: 13 } });
-  const srcLabel = (pt) => (pt.source === 'live' ? 'live collection' : `archive · ${pt.pages || 'page'}`);
+  const PAGE = { category: 'category page', offer: 'grower offer page', product: 'product page' };
+  const pageLabel = (p) => (p || '').split(', ').map((x) => PAGE[x] || x).join(', ');
+  const srcLabel = (pt) => (pt.source === 'live' ? 'live collection' : `archive · ${pageLabel(pt.pages) || 'page'}`);
 
   function productOption() {
     const o = baseOption();
@@ -183,7 +185,7 @@
       <span class="legend-dot"></span> live collection
     {/if}
     {#if sources.length}
-      <br>Sources: {sources.map((s) => `${s.source === 'live' ? 'live collection' : `archive ${s.page}s`} ${fmtInt(s.n)} (${s.first.slice(0, 7)} – ${s.last.slice(0, 7)})`).join(' · ')}
+      <br>Sources: {sources.map((s) => `${s.source === 'live' ? 'live collection' : `archive ${pageLabel(s.page)}s`} ${fmtInt(s.n)} (${s.first.slice(0, 7)} – ${s.last.slice(0, 7)})`).join(' · ')}
     {/if}
   </div>
 

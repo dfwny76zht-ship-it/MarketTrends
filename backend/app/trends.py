@@ -280,7 +280,7 @@ def history_variety(level: str = "species", shops: list[int] | None = Query(None
         rows = conn.execute(
             f"SELECT to_char(o.observed_at, 'YYYY-MM') AS month, count(DISTINCT l.id) AS offers,"
             f" count(DISTINCT {_key(level)}) AS taxa, count(DISTINCT o.grower) AS growers,"
-            " bool_or(o.source = 'live' OR o.raw->>'page' = 'category page') AS complete"
+            " bool_or(o.source = 'live' OR o.raw->>'page' = 'category') AS complete"
             f" {HIST_BASE} {f} GROUP BY 1 ORDER BY 1",
             p,
         ).fetchall()

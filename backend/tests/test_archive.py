@@ -86,7 +86,9 @@ def test_history_endpoints(db):
         shop = conn.execute("SELECT id FROM shops WHERE host = 'fa.example'").fetchone()["id"]
     taxonomy.seed()
     taxonomy.match_pending(shop)
-    taxonomy.confirm_likely()
+    with db.connection() as conn:  # confirm only this shop's suggestions (other tests rely on theirs staying open)
+        conn.execute("UPDATE assignments a SET confirmed = true FROM listings l WHERE l.id = a.listing_id AND l.shop_id = %s"
+                     " AND (a.species_id IS NOT NULL OR a.cultivar_id IS NOT NULL)", (shop,))
     v = trends.history_variety(shops=[shop])
     assert v and v[0]["month"] == "2019-08" and v[0]["complete"] and v[0]["growers"] >= 1
     g = trends.history_growers(shops=[shop])
@@ -95,4 +97,4 @@ def test_history_endpoints(db):
     assert t
     p = trends.history_product(key=t[0]["key"], shops=[shop])
     assert p["formats"] and all(pt["source"] == "archive" for fm in p["formats"] for pt in fm["points"])
-    assert trends.history_sources(shops=[shop])[0]["page"] == "category page"
+    assert trends.history_sources(shops=[shop])[0]["page"] == "category"
