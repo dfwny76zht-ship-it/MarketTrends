@@ -128,3 +128,33 @@ def test_merge_species(db, setup):
         syn = conn.execute("SELECT species_id FROM species_synonyms WHERE epithet = 'imbricatta'").fetchone()
         gone = conn.execute("SELECT 1 FROM species WHERE id = %s", (wrong,)).fetchone()
     assert syn["species_id"] == right and gone is None
+
+
+def test_species_becomes_cultivar_and_back(db, setup):
+    from app import taxonomy
+
+    with db.connection() as conn:
+        odd = conn.execute("INSERT INTO species (epithet, source) VALUES ('mauna', 'manual') RETURNING id").fetchone()["id"]
+        shop = conn.execute("SELECT id FROM shops WHERE host = 'a.example'").fetchone()["id"]
+        lid = conn.execute(
+            "INSERT INTO listings (shop_id, item_key, name, first_seen, last_seen) VALUES (%s, '20', 'Hoya mauna', now(), now())"
+            " RETURNING id", (shop,)).fetchone()["id"]
+    taxonomy.match_pending()
+    taxonomy.confirm("mauna", species_id=odd)
+
+    cid = taxonomy.species_to_cultivar(odd, "cultivar", "carnosa", "Mauna Loa")
+    a = assignment(db, lid)
+    assert (a["epithet"], a["cultivar"], a["kind"], a["confirmed"]) == ("carnosa", "Mauna Loa", "cultivar", True)
+
+    sid = taxonomy.cultivar_to_species(cid, "maunaloa")
+    a = assignment(db, lid)
+    assert (a["epithet"], a["cultivar"], a["confirmed"]) == ("maunaloa", None, True)
+    assert sid
+
+
+def test_unconfirm_sends_back_to_list(db, setup):
+    from app import taxonomy
+
+    taxonomy.unconfirm("mix")
+    a = assignment(db, setup["mix"])
+    assert not a["confirmed"] and not a["ignored"]

@@ -2,6 +2,7 @@
   import { api } from '../lib/api.js';
   import { KINDS, speciesName, cultivarName } from '../lib/taxa.js';
   import { AVAILABILITY, availabilityTone, money } from '../lib/labels.js';
+  import TaxonPicker from './TaxonPicker.svelte';
 
   let species = $state([]);
   let hybrids = $state([]);
@@ -14,6 +15,8 @@
   let editC = $state(null);
   let mergeText = $state('');
   let msg = $state('');
+  let conv = $state({ kind: 'cultivar', parent: '', name: '' });
+  let editKey = $state(null);
 
   function fromHash() {
     const m = location.hash.match(/^#\/species\/(c?)(\d+)/);
@@ -47,6 +50,8 @@
       detail = await api(s.type === 'species' ? `/species/${s.id}` : `/cultivars/${s.id}`);
       notes = (detail.species ?? detail.cultivar).notes ?? '';
       if (s.type === 'cultivar') editC = { ...detail.cultivar, speciesText: detail.cultivar.species ?? '' };
+      if (s.type === 'species') conv = { kind: 'cultivar', parent: '', name: detail.species.epithet.replace(/^./, (c) => c.toUpperCase()) };
+      editKey = null;
     } catch (e) {
       error = e.message;
     }
@@ -95,6 +100,12 @@
   async function saveCultivar(c) {
     error = '';
     try {
+      if (c.kind === 'species') {
+        const r = await api(`/cultivars/${c.id}/to-species`, { method: 'POST', body: { epithet: c.name } });
+        loadList();
+        location.hash = `#/species/${r.species_id}`;
+        return;
+      }
       const species_id = c.kind === 'hybrid' ? null : await resolveSpecies(c.speciesText);
       await api(`/cultivars/${c.id}`, {
         method: 'PATCH',
@@ -102,6 +113,42 @@
       });
       await Promise.all([loadDetail(sel), loadList()]);
       msg = 'Saved';
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  async function convert() {
+    error = '';
+    try {
+      const r = await api(`/species/${sel.id}/convert`, {
+        method: 'POST',
+        body: { kind: conv.kind, parent: conv.kind === 'hybrid' ? null : conv.parent, name: conv.name },
+      });
+      loadList();
+      location.hash = `#/species/c${r.cultivar_id}`;
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  async function respell(key, payload) {
+    error = '';
+    try {
+      await api('/assign/confirm', { method: 'POST', body: { key, ...payload } });
+      editKey = null;
+      await Promise.all([loadDetail(sel), loadList()]);
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  async function undo(key) {
+    error = '';
+    try {
+      await api('/assign/unconfirm', { method: 'POST', body: { key } });
+      await Promise.all([loadDetail(sel), loadList()]);
+      msg = 'Back in To assign';
     } catch (e) {
       error = e.message;
     }
@@ -212,9 +259,12 @@
             Kind
             <select bind:value={editC.kind}>
               {#each Object.entries(KINDS) as [k, v]}<option value={k}>{v}</option>{/each}
+              <option value="species">Species of its own</option>
             </select>
           </label>
-          {#if editC.kind !== 'hybrid'}
+          {#if editC.kind === 'species'}
+            <span></span>
+          {:else if editC.kind !== 'hybrid'}
             <label>Species <input bind:value={editC.speciesText} placeholder="carnosa" /></label>
           {:else}
             <label>Parents <input bind:value={editC.parents} placeholder="wayetii × ?" /></label>
@@ -241,7 +291,41 @@
 
       {#if detail.spellings.length}
         <h3>Confirmed spellings</h3>
-        <p class="muted small-text">{detail.spellings.map((s) => s.key).join(' · ')}</p>
+        {#each detail.spellings as sp (sp.key)}
+          <div class="spelling">
+            <span>{sp.key}</span>
+            <button onclick={() => (editKey = editKey === sp.key ? null : sp.key)}>Change</button>
+            <button onclick={() => undo(sp.key)}>Undo</button>
+          </div>
+          {#if editKey === sp.key}
+            <TaxonPicker
+              initial={detail.species
+                ? { species: detail.species.epithet }
+                : { species: detail.cultivar.species, cultivar: detail.cultivar.name, kind: detail.cultivar.kind }}
+              onsave={(p) => respell(sp.key, p)}
+              oncancel={() => (editKey = null)}
+            />
+          {/if}
+        {/each}
+      {/if}
+
+      {#if detail.species}
+        <h3>Change type</h3>
+        <div class="grid">
+          <label>
+            Is actually a
+            <select bind:value={conv.kind}>
+              {#each Object.entries(KINDS) as [k, v]}<option value={k}>{v}</option>{/each}
+            </select>
+          </label>
+          <label>Name <input bind:value={conv.name} /></label>
+          {#if conv.kind !== 'hybrid'}
+            <label class="wide">of species <input bind:value={conv.parent} placeholder="e.g. carnosa" /></label>
+          {/if}
+          <div class="wide">
+            <button onclick={convert} disabled={!conv.name.trim() || (conv.kind !== 'hybrid' && !conv.parent.trim())}>Change type</button>
+          </div>
+        </div>
       {/if}
 
       <h3>Merge</h3>
@@ -295,5 +379,8 @@
   .muted { color: var(--muted); font-size: 13px; }
   .small-text { font-size: 13px; }
   .merge { display: flex; gap: 8px; }
+  .spelling { display: flex; gap: 6px; align-items: center; font-size: 14px; margin-bottom: 4px; }
+  .spelling span { flex: 1; }
+  .spelling button { padding: 1px 8px; font-size: 13px; }
   .ok { color: var(--good); margin: 0 0 8px; }
 </style>

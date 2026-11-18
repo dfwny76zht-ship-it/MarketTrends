@@ -332,3 +332,88 @@ def merge_species(source_id: int, target_id: int) -> None:
         )
         conn.execute("DELETE FROM species WHERE id = %s", (source_id,))
     match_pending()
+
+
+# ---------- changing type later ----------
+
+def _move_cultivars(conn, from_sid: int, to_sid: int | None) -> None:
+    """Moves the cultivars of one species to another (or to no species); same-named ones are merged."""
+    for c in conn.execute("SELECT id, name FROM cultivars WHERE species_id = %s", (from_sid,)).fetchall():
+        twin = conn.execute(
+            "SELECT id FROM cultivars WHERE coalesce(species_id, 0) = coalesce(%s, 0) AND lower(name) = lower(%s)",
+            (to_sid, c["name"]),
+        ).fetchone()
+        if twin:
+            for table in ("aliases", "assignments"):
+                conn.execute(f"UPDATE {table} SET cultivar_id = %s WHERE cultivar_id = %s", (twin["id"], c["id"]))
+            conn.execute("DELETE FROM cultivars WHERE id = %s", (c["id"],))
+        else:
+            conn.execute(
+                "UPDATE cultivars SET species_id = %s, kind = CASE WHEN %s IS NULL AND kind <> 'hybrid' THEN 'hybrid' ELSE kind END"
+                " WHERE id = %s",
+                (to_sid, to_sid, c["id"]),
+            )
+
+
+def species_to_cultivar(species_id: int, kind: str, parent_epithet: str | None = None, name: str | None = None) -> int:
+    """A species turns out to be a cultivar/form/subspecies (of `parent_epithet`) or a hybrid.
+    All its offers and spellings move along. Returns the new cultivar id."""
+    if kind not in ("cultivar", "form", "subspecies", "hybrid"):
+        raise ValueError("Unknown kind.")
+    with pool.connection() as conn:
+        sp = conn.execute("SELECT * FROM species WHERE id = %s", (species_id,)).fetchone()
+        if not sp:
+            raise ValueError("Species not found.")
+        parent = None
+        if kind != "hybrid":
+            if not parent_epithet:
+                raise ValueError("Choose the species it belongs to, or make it a hybrid.")
+            e = parent_epithet.strip().lower().removeprefix("hoya ").strip()
+            row = conn.execute("SELECT id FROM species WHERE epithet = %s", (e,)).fetchone()
+            if not row:
+                raise ValueError(f"Hoya {e} is not in the species list.")
+            parent = row["id"]
+            if parent == species_id:
+                raise ValueError("A species can't belong to itself.")
+        cid = _create_cultivar(conn, parent, name or sp["epithet"].capitalize(), kind)
+        _move_cultivars(conn, species_id, parent)
+        for table in ("aliases", "assignments"):
+            conn.execute(f"UPDATE {table} SET cultivar_id = %s WHERE species_id = %s AND cultivar_id IS NULL",
+                         (cid, species_id))
+            conn.execute(f"UPDATE {table} SET species_id = %s WHERE species_id = %s", (parent, species_id))
+        conn.execute("DELETE FROM species_synonyms WHERE species_id = %s", (species_id,))
+        note = f"Was listed as species Hoya {sp['epithet']}." + (f" {sp['notes']}" if sp["notes"] else "")
+        conn.execute("UPDATE cultivars SET notes = trim(notes || ' ' || %s) WHERE id = %s", (note, cid))
+        conn.execute("DELETE FROM species WHERE id = %s", (species_id,))
+    match_pending()
+    return cid
+
+
+def cultivar_to_species(cultivar_id: int, epithet: str | None = None) -> int:
+    """A cultivar/form/hybrid turns out to be a species of its own. Returns the species id."""
+    with pool.connection() as conn:
+        c = conn.execute("SELECT * FROM cultivars WHERE id = %s", (cultivar_id,)).fetchone()
+        if not c:
+            raise ValueError("Cultivar not found.")
+        sid = _create_species(conn, epithet or c["name"])
+        for table in ("aliases", "assignments"):
+            conn.execute(f"UPDATE {table} SET species_id = %s, cultivar_id = NULL WHERE cultivar_id = %s",
+                         (sid, cultivar_id))
+        if c["notes"]:
+            conn.execute("UPDATE species SET notes = trim(notes || ' ' || %s) WHERE id = %s", (c["notes"], sid))
+        conn.execute("DELETE FROM cultivars WHERE id = %s", (cultivar_id,))
+    match_pending()
+    return sid
+
+
+def unconfirm(key: str) -> int:
+    """Forgets a confirmed spelling; its offers go back to "To assign"."""
+    with pool.connection() as conn:
+        conn.execute("DELETE FROM aliases WHERE key = %s", (key,))
+        n = conn.execute(
+            "UPDATE assignments a SET confirmed = false, ignored = false FROM listings l"
+            " WHERE l.id = a.listing_id AND l.name_key = %s",
+            (key,),
+        ).rowcount
+    match_pending()
+    return n

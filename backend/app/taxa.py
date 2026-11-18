@@ -271,3 +271,40 @@ def merge_cultivar(cultivar_id: int, body: MergeIn):
     except ValueError as exc:
         _bad(exc)
     return {"ok": True}
+
+
+class ConvertIn(BaseModel):
+    kind: Kind
+    parent: str | None = None
+    name: str | None = None
+
+
+@router.post("/species/{species_id}/convert")
+def convert_species(species_id: int, body: ConvertIn):
+    try:
+        cid = taxonomy.species_to_cultivar(species_id, body.kind, body.parent, body.name)
+    except ValueError as exc:
+        _bad(exc)
+    return {"cultivar_id": cid}
+
+
+class ToSpeciesIn(BaseModel):
+    epithet: str | None = None
+
+
+@router.post("/cultivars/{cultivar_id}/to-species")
+def convert_cultivar(cultivar_id: int, body: ToSpeciesIn):
+    try:
+        sid = taxonomy.cultivar_to_species(cultivar_id, body.epithet)
+    except ValueError as exc:
+        _bad(exc)
+    return {"species_id": sid}
+
+
+class KeyIn(BaseModel):
+    key: str
+
+
+@router.post("/assign/unconfirm")
+def unconfirm(body: KeyIn):
+    return {"updated": taxonomy.unconfirm(body.key)}
