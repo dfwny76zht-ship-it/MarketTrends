@@ -113,6 +113,11 @@
       <div class="value">{fmtInt(ov.offers.at(-1))}</div>
       <Sparkline values={ov.offers} />
     </div>
+    <div class="tile">
+      <div class="label">Average price (net)</div>
+      <div class="value">{fmtEur(ov.avg_price.at(-1))}</div>
+      <Sparkline values={ov.avg_price} />
+    </div>
     {#each EVENT_TILES as [kind, label]}
       <div class="tile">
         <div class="label">{label}</div>

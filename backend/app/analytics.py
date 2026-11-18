@@ -91,7 +91,8 @@ def overview(days: int = 28, shops: list[int] | None = Query(None), size: str | 
         ef, ep = flt.where(conn, fl, "event")
         daily = conn.execute(
             f"SELECT {DAY} AS day, count(DISTINCT l.id) AS offers,"
-            " count(DISTINCT coalesce('s' || a.species_id, 'c' || a.cultivar_id)) AS species"
+            " count(DISTINCT coalesce('s' || a.species_id, 'c' || a.cultivar_id)) AS species,"
+            " avg(o.price_eur_net) AS avg_price"
             f" {BASE} {f} GROUP BY 1 ORDER BY 1",
             p,
         ).fetchall()
@@ -117,6 +118,7 @@ def overview(days: int = 28, shops: list[int] | None = Query(None), size: str | 
         "days": [str(d["day"]) for d in daily],
         "offers": [d["offers"] for d in daily],
         "species": [d["species"] for d in daily],
+        "avg_price": [round(float(d["avg_price"]), 2) if d["avg_price"] is not None else None for d in daily],
         "events": {k: v for k, v in by_kind.items()},
         "unassigned": unassigned,
         "shops": shop_list,

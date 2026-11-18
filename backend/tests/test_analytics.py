@@ -50,6 +50,7 @@ def test_overview(data):
     assert len(o["days"]) == 3
     assert o["events"]["restock"]
     assert o["events"]["price_change"]
+    assert o["avg_price"][-1] is not None and len(o["avg_price"]) == 3
 
 
 def test_taxa_table(data):
