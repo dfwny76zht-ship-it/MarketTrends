@@ -27,7 +27,31 @@ def main() -> None:
     reparse = sub.add_parser("reparse", help="parse an earlier run's stored pages again")
     reparse.add_argument("run_id", type=int)
     sub.add_parser("images", help="copy new offer photos now")
+    arc = sub.add_parser("archive", help="history from web archives")
+    arc.add_argument("action", choices=["discover", "run", "reread", "reference"])
+    arc.add_argument("shop_id", type=int)
+    arc.add_argument("--limit", type=int)
+    arc.add_argument("--csv", help="reference CSV (for 'reference'), read from stdin if '-'")
     args = parser.parse_args()
+
+    if args.cmd == "archive":
+        from . import archive
+        from .db import pool
+
+        pool.open(wait=True)
+        try:
+            if args.action == "discover":
+                print(archive.discover(args.shop_id))
+            elif args.action == "run":
+                print(archive.run(args.shop_id, args.limit))
+            elif args.action == "reread":
+                print(archive.reread(args.shop_id))
+            else:
+                text = sys.stdin.read() if args.csv in (None, "-") else open(args.csv, encoding="utf-8").read()
+                print(archive.import_reference(args.shop_id, text), "reference rows")
+        finally:
+            pool.close()
+        return
 
     if args.cmd == "images":
         from . import images
