@@ -79,6 +79,11 @@ body.retail .flow .chart { height: 210px; }
 .card.hl { background: color-mix(in srgb, var(--gc) 14%, #fff); box-shadow: 0 0 0 2px var(--gc); }
 .sub { font-size: 12px; color: var(--muted); margin: -2px 0 4px; }
 .medchart { height: 150px; }
+h3.sec { font-size: 15px; margin: 14px 0 2px; }
+.histstats { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 2px; }
+.histstats div { border: 1.5px solid var(--line); border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--ink-2); }
+.histstats b { display: block; font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.histchart { height: 440px; }
 .big { font-size: 22px; font-weight: 650; display: block; line-height: 1.2; }
 
 .block { margin-bottom: 14px; }

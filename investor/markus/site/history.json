@@ -1,0 +1,168 @@
+{
+ "day": "2026-11-18",
+ "pairs": [
+  {
+   "plant": "Hoya carnosa 'Tricolor'",
+   "pot": "5.5 cm",
+   "then_day": "2019-08-18",
+   "then": 0.63,
+   "now": 2.25,
+   "change": 2.5714285714285716
+  },
+  {
+   "plant": "Hoya carnosa 'Krimson Queen'",
+   "pot": "12 cm",
+   "then_day": "2019-08-18",
+   "then": 2.21,
+   "now": 5.72,
+   "change": 1.5882352941176472
+  },
+  {
+   "plant": "Hoya australis",
+   "pot": "17 cm",
+   "then_day": "2021-01-21",
+   "then": 9.34,
+   "now": 19.69,
+   "change": 1.1081370449678802
+  },
+  {
+   "plant": "Hoya australis",
+   "pot": "14 cm",
+   "then_day": "2019-07-06",
+   "then": 5.37,
+   "now": 9.38,
+   "change": 0.7467411545623837
+  },
+  {
+   "plant": "Hoya wayetii",
+   "pot": "12 cm",
+   "then_day": "2021-09-24",
+   "then": 3.84,
+   "now": 6.15,
+   "change": 0.6015625000000002
+  },
+  {
+   "plant": "Hoya kerrii",
+   "pot": "6 cm",
+   "then_day": "2019-12-14",
+   "then": 1.38,
+   "now": 2.2,
+   "change": 0.5942028985507248
+  },
+  {
+   "plant": "Hoya carnosa 'Tricolor'",
+   "pot": "6 cm",
+   "then_day": "2019-08-18",
+   "then": 0.97,
+   "now": 1.44,
+   "change": 0.48453608247422686
+  },
+  {
+   "plant": "Hoya lacunosa 'Mint'",
+   "pot": "9 cm",
+   "then_day": "2024-08-16",
+   "then": 3.11,
+   "now": 4.48,
+   "change": 0.44051446945337647
+  },
+  {
+   "plant": "Hoya kerrii Variegata",
+   "pot": "6 cm",
+   "then_day": "2021-02-02",
+   "then": 1.71,
+   "now": 2.39,
+   "change": 0.3976608187134505
+  },
+  {
+   "plant": "Hoya gracilis",
+   "pot": "14 cm",
+   "then_day": "2021-01-21",
+   "then": 5.85,
+   "now": 7.84,
+   "change": 0.3401709401709403
+  },
+  {
+   "plant": "Hoya lacunosa 'Mint'",
+   "pot": "6 cm",
+   "then_day": "2024-08-16",
+   "then": 1.96,
+   "now": 2.25,
+   "change": 0.1479591836734695
+  },
+  {
+   "plant": "Hoya carnosa 'Tricolor Flamingo Dream'",
+   "pot": "6 cm",
+   "then_day": "2026-02-04",
+   "then": 2.29,
+   "now": 2.5,
+   "change": 0.09170305676855883
+  },
+  {
+   "plant": "Hoya carnosa 'Tricolor'",
+   "pot": "12 cm",
+   "then_day": "2019-02-23",
+   "then": 5.95,
+   "now": 6.25,
+   "change": 0.050420168067226934
+  },
+  {
+   "plant": "Hoya pubicalyx 'Silver Spot'",
+   "pot": "17 cm",
+   "then_day": "2024-07-28",
+   "then": 20.23,
+   "now": 20.74,
+   "change": 0.025210084033613356
+  },
+  {
+   "plant": "Hoya australis",
+   "pot": "12 cm",
+   "then_day": "2019-08-18",
+   "then": 5.33,
+   "now": 5.09,
+   "change": -0.04502814258911825
+  },
+  {
+   "plant": "Hoya carnosa 'Tricolor'",
+   "pot": "9 cm",
+   "then_day": "2023-06-03",
+   "then": 3.07,
+   "now": 2.9,
+   "change": -0.055374592833876246
+  },
+  {
+   "plant": "Hoya carnosa 'Tricolor'",
+   "pot": "14 cm",
+   "then_day": "2019-12-06",
+   "then": 9.34,
+   "now": 7.84,
+   "change": -0.16059957173447537
+  },
+  {
+   "plant": "Hoya pubicalyx 'Silver Spot'",
+   "pot": "12 cm",
+   "then_day": "2024-07-28",
+   "then": 6.96,
+   "now": 4.81,
+   "change": -0.3089080459770115
+  },
+  {
+   "plant": "Hoya verticillata",
+   "pot": "10.5 cm",
+   "then_day": "2019-07-13",
+   "then": 9.1,
+   "now": 6.22,
+   "change": -0.31648351648351647
+  },
+  {
+   "plant": "Hoya imbricata",
+   "pot": "14 cm",
+   "then_day": "2025-08-22",
+   "then": 15.49,
+   "now": 9.69,
+   "change": -0.37443511943189156
+  }
+ ],
+ "median_change": 0.2440650619222049,
+ "cheaper": 6,
+ "n": 20
+}

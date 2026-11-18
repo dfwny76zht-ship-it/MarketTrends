@@ -11,6 +11,6 @@ if [ "${REFRESH:-0}" = "1" ] || [ ! -f "$out/data.json" ]; then
     mv "$out/data.json.new" "$out/data.json"
     rm -f "$tmp"
 fi
-cp investor/markus/site/index.html investor/markus/site/app.js investor/markus/site/style.css investor/markus/site/echarts.min.js "$out/"
-chmod a+r "$out"/index.html "$out"/app.js "$out"/style.css "$out"/echarts.min.js "$out"/data.json
+cp investor/markus/site/index.html investor/markus/site/app.js investor/markus/site/style.css investor/markus/site/echarts.min.js investor/markus/site/history.json "$out/"
+chmod a+r "$out"/index.html "$out"/app.js "$out"/style.css "$out"/echarts.min.js "$out"/history.json "$out"/data.json
 echo "published $(git log --oneline -1)"

@@ -325,7 +325,45 @@
   const bp = FA.filter((o) => /fitchii|soligamiana/i.test(o.plant) && /^9 cm/.test(o.pot ?? ''));
   const bpNames = [...new Set(bp.map((o) => o.plant))].map((n) => `<em>${esc(n)}</em>`);
   $('prices').innerHTML = `Im Verkauf an Händler zählt der Großhandelspreis. ${bpNames.join(' und ')} gibt es bei FlorAccess für
-    ${eur(bp[0]?.net)} im 9-cm-Topf, das liegt unter unserem Händlerpreis von 8 €.`;
+    ${eur(bp[0]?.net)} im 9-cm-Topf, das liegt unter unserem Händlerpreis von 8 €.
+    Diese Preise gelten ab einer ganzen Lage (meist 36 Pflanzen, bei Kerrii 108). Die kleinste Bestelleinheit ist ein Tray mit
+    meist 6 bis 12 Pflanzen, rund 3 % teurer. Je ein Tray von jedem der 61 selteneren Angebote wären 409 Pflanzen für 3.074 €.`;
+  // Staffelpreise (Tray/Lage) from the live observation of 18.11.2026, not part of data.json; counted once, frozen here.
+
+  // ---------- price development (history.json: archived FlorAccess prices vs. today) ----------
+  const hist = await fetch('history.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (hist) {
+    const sp = (v) => `${v > 0 ? '+' : '−'}${nf0.format(Math.abs(v) * 100)} %`;
+    $('hist-stats').innerHTML = `<div><b>${sp(hist.median_change)}</b>Median aller ${hist.n} Paare</div>
+      <div><b>${hist.n - hist.cheaper} von ${hist.n}</b>teurer geworden</div>
+      <div><b>${hist.cheaper} von ${hist.n}</b>günstiger (${nf0.format((hist.cheaper / hist.n) * 100)} %)</div>`;
+    const short = (p) => `${p.plant.replace(/^Hoya /, '')} ${p.pot.replace(' cm', '')} cm (${p.then_day.slice(0, 4)})`;
+    const rows = [...hist.pairs].reverse();
+    const hc = echarts.init($('hist-chart'), null, { renderer: 'svg' });
+    hc.setOption({
+      animation: false, textStyle: { fontFamily: 'system-ui, sans-serif' },
+      grid: { left: 4, right: 96, top: 8, bottom: 4, containLabel: true },
+      xAxis: { type: 'value', axisLabel: { formatter: (v) => `${v > 0 ? '+' : ''}${v} %`, color: css('--muted'), fontSize: 11 },
+        splitLine: { lineStyle: { color: css('--line') } } },
+      yAxis: { type: 'category', data: rows.map(short), axisTick: { show: false }, axisLine: { show: false },
+        axisLabel: { color: css('--ink-2'), fontSize: 12 } },
+      tooltip: { trigger: 'item', backgroundColor: '#fff', borderColor: css('--line'), textStyle: { color: css('--ink'), fontSize: 13 },
+        formatter: (p) => { const r = rows[p.dataIndex]; return `<b>${esc(r.plant)}</b>, ${esc(r.pot)}<br>${new Date(r.then_day).toLocaleDateString('de-DE')}: ${eur(r.then)}<br>18.11.2026: ${eur(r.now)}<br>${sp(r.change)}`; } },
+      series: [{ type: 'bar', barWidth: '64%',
+        data: rows.map((r) => ({ value: Math.round(r.change * 100), itemStyle: { color: r.change < 0 ? css('--accent') : '#8a5a44',
+          borderRadius: r.change < 0 ? [3, 0, 0, 3] : [0, 3, 3, 0] } })),
+        label: { show: true, position: 'right', fontSize: 11, color: css('--ink-2'),
+          formatter: (p) => { const r = rows[p.dataIndex]; return `${eur(r.then)} → ${eur(r.now)}`; } },
+        markLine: { symbol: 'none', silent: true, lineStyle: { color: css('--ink'), type: 'dashed', width: 1.5 },
+          label: { formatter: `Median ${sp(hist.median_change)}`, position: 'insideEndTop', fontSize: 11, color: css('--ink') },
+          data: [{ xAxis: Math.round(hist.median_change * 100) }] } }],
+    });
+    new ResizeObserver(() => hc.resize()).observe($('hist-chart'));
+    $('hist-text').innerHTML = `Eine Art wird nicht mit den Jahren billiger, sondern dann, wenn ein niederländischer Betrieb sie in
+      Produktion nimmt. Heute ist das Angebot bei FlorAccess deutlich größer: Im Archiv von 2019 finden sich mindestens 45 Hoya-Angebote,
+      am 18.11.2026 waren es ${FA.length} (ohne Mischungen). Für Kerrii zählt heute das Einzelblatt, weil sich archivierte Angebote nicht
+      danach unterscheiden lassen; heute ist jeweils das günstigste Angebot gleicher Topfgröße angesetzt.`;
+  }
 
   // ---------- origin ----------
   const O = data.origin;
