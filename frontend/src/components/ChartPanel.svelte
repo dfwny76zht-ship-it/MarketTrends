@@ -208,9 +208,10 @@
 </script>
 
 <div class="card panel">
+  <h2 class="panel-title">Chart</h2>
   <div class="panel-controls">
     <div class="block">
-      <span class="block-label">Chart</span>
+      <span class="block-label">Kind</span>
       <div class="seg" role="group" aria-label="Chart type">
         {#each TYPES as [v, label]}
           <button class:on={chartPanel.type === v} disabled={v === 'pie' && overlapping}
@@ -236,7 +237,7 @@
       </div>
     </div>
     <div class="block">
-      <span class="block-label">Shops</span>
+      <span class="block-label">Layout</span>
       <label class="switch"><input type="checkbox" bind:checked={chartPanel.split} /> One chart per shop</label>
     </div>
     <div class="links">
@@ -309,7 +310,9 @@
 </div>
 
 <style>
-  .panel-controls { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: flex-end; margin-bottom: 10px; }
+  .panel-title { font-size: 15px; margin: 0 0 10px; }
+  .panel-controls { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: flex-end; margin: 0 -14px 12px;
+    padding: 0 14px 12px; border-bottom: 1px solid var(--border); }
   .block { display: flex; flex-direction: column; gap: 6px; }
   .block-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
   .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; flex-wrap: wrap; }

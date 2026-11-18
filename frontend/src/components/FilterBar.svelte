@@ -31,6 +31,7 @@
 </script>
 
 <div class="controls" bind:this={root}>
+  <div class="scope-note">Applies to the whole page</div>
   {#if time}
     <div class="block">
       <span class="block-label">Time</span>
@@ -116,6 +117,10 @@
 
 <style>
   .controls {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
     display: flex;
     flex-wrap: wrap;
     align-items: stretch;
@@ -124,6 +129,15 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+  }
+  .scope-note {
+    width: 100%;
+    padding: 5px 14px;
+    font-size: 12px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+    border-radius: var(--radius) var(--radius) 0 0;
   }
   .block {
     display: flex;
@@ -224,6 +238,7 @@
   .pop-link { margin-top: 8px; font-size: 13px; color: var(--accent); }
   .reset { padding: 4px 10px; font-size: 13px; color: var(--muted); }
   @media (max-width: 700px) {
+    .controls { position: static; box-shadow: none; }
     .block { border-right: none; border-bottom: 1px solid var(--border); width: 100%; }
     .block:last-child { border-bottom: none; }
   }
