@@ -3,6 +3,7 @@
   import { filters, filterParams, chartPanel, meta, loadMeta } from '../lib/state.svelte.js';
   import { baseOption, lineSeries, cssVar, slotColor, fmtEur, fmtInt, qs } from '../lib/viz.js';
   import Chart from './Chart.svelte';
+  import PriceRanges from './PriceRanges.svelte';
 
   loadMeta();
 
@@ -11,12 +12,43 @@
   const MAX_SLICES = 6;
 
   let data = $state(null);
+  let editRanges = $state(false);
+
+  // Top species: a species keeps its colour when the measure or filters change (as long as slots allow).
+  const remembered = new Map();
+  const slotOf = $derived.by(() => {
+    const ids = (data?.groups ?? []).filter((g) => g.id !== 'other').map((g) => g.id);
+    if (chartPanel.by !== 'top') return Object.fromEntries(ids.map((id, i) => [id, i]));
+    const out = {};
+    const used = new Set();
+    for (const id of ids) {
+      const s = remembered.get(id);
+      if (s != null && !used.has(s)) {
+        out[id] = s;
+        used.add(s);
+      }
+    }
+    for (const id of ids) {
+      if (out[id] != null) continue;
+      let s = 0;
+      while (used.has(s)) s++;
+      out[id] = s;
+      used.add(s);
+      remembered.set(id, s);
+    }
+    return out;
+  });
   let error = $state('');
   let busy = $state(false);
 
   // Default "group by": the first grouping (Price).
   $effect(() => {
-    if (!chartPanel.by && meta.groupings.length) chartPanel.by = String(meta.groupings[0].id);
+    if (!meta.loaded || !meta.groupings.length) return;
+    const valid = ['top', 'shop', ...meta.groupings.map((g) => String(g.id))];
+    if (!valid.includes(chartPanel.by)) {
+      const price = meta.groupings.find((g) => g.kind === 'price') ?? meta.groupings[0];
+      chartPanel.by = String(price.id);
+    }
   });
 
   const grouping = $derived(meta.groupings.find((g) => String(g.id) === chartPanel.by));
@@ -43,7 +75,7 @@
   }
 
   $effect(() => {
-    if (!chartPanel.by) return;
+    if (!chartPanel.by || (!['top', 'shop'].includes(chartPanel.by) && !grouping)) return;
     load({
       ...filterParams(),
       level: filters.level,
@@ -56,8 +88,7 @@
 
   function colorOf(gid) {
     if (gid === 'other') return cssVar('--viz-muted');
-    const i = (data?.groups ?? []).filter((g) => g.id !== 'other').findIndex((g) => g.id === gid);
-    return slotColor(Math.max(0, i));
+    return slotColor(slotOf[gid] ?? 0);
   }
 
   const panels = $derived(data?.panels?.length ? data.panels : [{ id: null, name: '' }]);
@@ -208,8 +239,19 @@
       <span class="block-label">Shops</span>
       <label class="switch"><input type="checkbox" bind:checked={chartPanel.split} /> One chart per shop</label>
     </div>
-    <a class="edit" href="#/groupings">Edit groupings</a>
+    <div class="links">
+      {#if grouping?.kind === 'price'}
+        <button class="link" class:on={editRanges} onclick={() => (editRanges = !editRanges)}>Price ranges</button>
+      {:else if grouping?.kind === 'manual'}
+        <a class="link" href="#/groupings/{grouping.id}">Edit {grouping.name}</a>
+      {/if}
+      <a class="link" href="#/groupings/new">＋ New grouping</a>
+    </div>
   </div>
+
+  {#if editRanges && grouping?.kind === 'price'}
+    {#key grouping.id}<PriceRanges {grouping} onclose={() => (editRanges = false)} />{/key}
+  {/if}
 
   {#if error}<p class="error">{error}</p>{/if}
 
@@ -277,7 +319,10 @@
   .pick { width: auto; padding: 5px 10px; font-size: 14px; background: var(--surface-2); }
   .switch { display: flex; gap: 8px; align-items: center; font-size: 14px; padding: 5px 0; cursor: pointer; white-space: nowrap; }
   .switch input { width: auto; }
-  .edit { margin-left: auto; font-size: 13px; color: var(--accent); padding-bottom: 6px; }
+  .links { margin-left: auto; display: flex; gap: 6px; align-items: center; padding-bottom: 2px; }
+  .link { font-size: 13px; color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 4px 10px; background: var(--surface); text-decoration: none; }
+  .link.on { border-color: var(--accent); }
   .grid.multi { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
   .cell-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
   .busy { opacity: 0.6; }

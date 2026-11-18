@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg import errors
 from pydantic import BaseModel
 
-from .analytics import _taxon_filter
+from . import filters as flt
+from .analytics import BASE, TAXON_NAME, _key, _taxon_filter
 from .auth import current_user
 from .db import pool
 from .filters import TYPES, load_groupings
@@ -46,7 +47,50 @@ def list_groupings():
 
 class GroupingIn(BaseModel):
     name: str
-    kind: str = "manual"
+    start: str = "empty"  # empty | type | copy:<grouping id>
+
+
+def _seed_from_type(conn, gid: int) -> None:
+    """Groups Species / Forms / Cultivars / Hybrids, filled with every plant that has confirmed offers."""
+    ids = {}
+    for pos, (val, name) in enumerate([("species", "Species"), ("form", "Forms / subspecies"),
+                                       ("cultivar", "Cultivars"), ("hybrid", "Hybrids")]):
+        ids[val] = conn.execute(
+            "INSERT INTO grouping_groups (grouping_id, name, position) VALUES (%s, %s, %s) RETURNING id", (gid, name, pos)
+        ).fetchone()["id"]
+    conn.execute(
+        "INSERT INTO grouping_members (grouping_id, group_id, species_id)"
+        " SELECT DISTINCT %s, %s, a.species_id FROM assignments a"
+        " WHERE a.confirmed AND NOT a.ignored AND a.cultivar_id IS NULL AND a.species_id IS NOT NULL",
+        (gid, ids["species"]),
+    )
+    conn.execute(
+        "INSERT INTO grouping_members (grouping_id, group_id, cultivar_id)"
+        " SELECT DISTINCT %s, CASE WHEN c.kind IN ('form', 'subspecies') THEN %s WHEN c.kind = 'hybrid' THEN %s ELSE %s END, c.id"
+        " FROM assignments a JOIN cultivars c ON c.id = a.cultivar_id WHERE a.confirmed AND NOT a.ignored",
+        (gid, ids["form"], ids["hybrid"], ids["cultivar"]),
+    )
+
+
+def _seed_from_copy(conn, gid: int, source: int) -> None:
+    src = conn.execute("SELECT kind FROM groupings WHERE id = %s", (source,)).fetchone()
+    if not src:
+        raise HTTPException(404, "Grouping to copy not found.")
+    if src["kind"] == "type":
+        return _seed_from_type(conn, gid)
+    if src["kind"] != "manual":
+        raise HTTPException(422, "Price ranges can't be copied into plant groups.")
+    for g in conn.execute("SELECT id, name, position FROM grouping_groups WHERE grouping_id = %s ORDER BY position, id",
+                          (source,)).fetchall():
+        new = conn.execute(
+            "INSERT INTO grouping_groups (grouping_id, name, position) VALUES (%s, %s, %s) RETURNING id",
+            (gid, g["name"], g["position"]),
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO grouping_members (grouping_id, group_id, species_id, cultivar_id)"
+            " SELECT %s, %s, species_id, cultivar_id FROM grouping_members WHERE group_id = %s",
+            (gid, new, g["id"]),
+        )
 
 
 @router.post("")
@@ -54,24 +98,26 @@ def create(body: GroupingIn):
     name = body.name.strip()
     if not name:
         raise HTTPException(422, "Give the grouping a name.")
-    if body.kind not in ("price", "manual"):
-        raise HTTPException(422, "New groupings are price ranges or manual.")
     with pool.connection() as conn:
-        try:
-            gid = conn.execute(
-                "INSERT INTO groupings (name, kind, position) VALUES (%s, %s,"
-                " (SELECT coalesce(max(position), -1) + 1 FROM groupings)) RETURNING id",
-                (name, body.kind),
-            ).fetchone()["id"]
-        except errors.UniqueViolation:
-            raise HTTPException(409, f"A grouping called {name} already exists.")
-        if body.kind == "price":
-            conn.execute(
-                "INSERT INTO grouping_groups (grouping_id, position, price_from, price_to)"
-                " VALUES (%s, 0, NULL, 20), (%s, 1, 20, NULL)",
-                (gid, gid),
-            )
-        return _all(conn)
+        with conn.transaction():
+            try:
+                gid = conn.execute(
+                    "INSERT INTO groupings (name, kind, position) VALUES (%s, 'manual',"
+                    " (SELECT coalesce(max(position), -1) + 1 FROM groupings)) RETURNING id",
+                    (name,),
+                ).fetchone()["id"]
+            except errors.UniqueViolation:
+                raise HTTPException(409, f"A grouping called {name} already exists.")
+            if body.start == "type":
+                _seed_from_type(conn, gid)
+            elif body.start.startswith("copy:"):
+                try:
+                    _seed_from_copy(conn, gid, int(body.start[5:]))
+                except ValueError:
+                    raise HTTPException(422, "Unknown starting point.")
+            elif body.start != "empty":
+                raise HTTPException(422, "Unknown starting point.")
+        return {"id": gid, "groupings": _all(conn)}
 
 
 class RenameIn(BaseModel):
@@ -96,8 +142,8 @@ def rename(grouping_id: int, body: RenameIn):
 def delete(grouping_id: int):
     with pool.connection() as conn:
         g = conn.execute("SELECT kind FROM groupings WHERE id = %s", (grouping_id,)).fetchone()
-        if g and g["kind"] == "type":
-            raise HTTPException(422, "The type grouping can't be deleted.")
+        if g and g["kind"] in ("type", "price"):
+            raise HTTPException(422, "Price and Type are built in and can't be deleted.")
         conn.execute("DELETE FROM groupings WHERE id = %s", (grouping_id,))
         return _all(conn)
 
@@ -175,6 +221,43 @@ def set_groups(grouping_id: int, body: GroupsIn):
         return _all(conn)
 
 
+class BulkIn(BaseModel):
+    keys: list[str]
+    group_id: int | None = None
+
+
+@router.post("/{grouping_id}/members/bulk")
+def set_members(grouping_id: int, body: BulkIn):
+    """Move several plants into one group (or out of the grouping) at once."""
+    with pool.connection() as conn:
+        with conn.transaction():
+            _check_manual(conn, grouping_id, body.group_id)
+            for key in body.keys:
+                _set_one(conn, grouping_id, key, body.group_id)
+        return _all(conn)
+
+
+def _check_manual(conn, grouping_id: int, group_id: int | None) -> None:
+    g = conn.execute("SELECT kind FROM groupings WHERE id = %s", (grouping_id,)).fetchone()
+    if not g or g["kind"] != "manual":
+        raise HTTPException(422, "Plants are only added by hand to your own groupings.")
+    if group_id is not None and not conn.execute(
+        "SELECT 1 FROM grouping_groups WHERE id = %s AND grouping_id = %s", (group_id, grouping_id)
+    ).fetchone():
+        raise HTTPException(404, "Group not found.")
+
+
+def _set_one(conn, grouping_id: int, key: str, group_id: int | None) -> None:
+    col = "species_id" if key.startswith("s") else "cultivar_id"
+    _, tid = _taxon_filter(key)
+    conn.execute(f"DELETE FROM grouping_members WHERE grouping_id = %s AND {col} = %s", (grouping_id, tid))
+    if group_id is not None:
+        conn.execute(
+            f"INSERT INTO grouping_members (grouping_id, group_id, {col}) VALUES (%s, %s, %s)",
+            (grouping_id, group_id, tid),
+        )
+
+
 class MemberIn(BaseModel):
     key: str
     group_id: int | None = None  # None removes the plant from this grouping
@@ -182,20 +265,49 @@ class MemberIn(BaseModel):
 
 @router.post("/{grouping_id}/members")
 def set_member(grouping_id: int, body: MemberIn):
-    col = "species_id" if body.key.startswith("s") else "cultivar_id"
-    _, tid = _taxon_filter(body.key)
     with pool.connection() as conn:
-        g = conn.execute("SELECT kind FROM groupings WHERE id = %s", (grouping_id,)).fetchone()
-        if not g or g["kind"] != "manual":
-            raise HTTPException(422, "Plants are only added by hand to manual groupings.")
-        if body.group_id is not None and not conn.execute(
-            "SELECT 1 FROM grouping_groups WHERE id = %s AND grouping_id = %s", (body.group_id, grouping_id)
-        ).fetchone():
-            raise HTTPException(404, "Group not found.")
-        conn.execute(f"DELETE FROM grouping_members WHERE grouping_id = %s AND {col} = %s", (grouping_id, tid))
-        if body.group_id is not None:
-            conn.execute(
-                f"INSERT INTO grouping_members (grouping_id, group_id, {col}) VALUES (%s, %s, %s)",
-                (grouping_id, body.group_id, tid),
-            )
+        with conn.transaction():
+            _check_manual(conn, grouping_id, body.group_id)
+            _set_one(conn, grouping_id, body.key, body.group_id)
         return _all(conn)
+
+
+@router.get("/{grouping_id}/plants")
+def plants(grouping_id: int, days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
+           scope: str = "period", types: list[str] | None = Query(None)):
+    """Every plant (species-level offers and each cultivar / form / hybrid) with its own membership, its offers
+    under the current filters (each offer's latest observation), median net price and a photo."""
+    fl = flt.make(days, shops, size, scope, types, None)
+    key, name = _key("cultivar"), TAXON_NAME
+    with pool.connection() as conn:
+        if not conn.execute("SELECT 1 FROM groupings WHERE id = %s AND kind = 'manual'", (grouping_id,)).fetchone():
+            raise HTTPException(404, "Grouping not found.")
+        all_time = fl.scope != "period"
+        f, p = flt.where(conn, fl, "obs", period=not all_time)
+        window = "" if all_time or fl.days <= 0 else " WHERE observed_at >= now() - make_interval(days => %s)"
+        f += f" AND o.id IN (SELECT DISTINCT ON (listing_id) id FROM observations{window} ORDER BY listing_id, observed_at DESC)"
+        if window:
+            p = p + [fl.days]
+        rows = conn.execute(
+            f"SELECT {key} AS key, {name} AS name, {flt.TYPE_SQL} AS type,"
+            " CASE WHEN a.species_id IS NOT NULL THEN 's' || a.species_id END AS species_key,"
+            " count(DISTINCT l.id) AS offers, count(DISTINCT l.shop_id) AS shops,"
+            " percentile_cont(0.5) WITHIN GROUP (ORDER BY o.price_eur_net) AS price, sum(o.quantity) AS stock,"
+            " max(l.id) FILTER (WHERE EXISTS (SELECT 1 FROM images i WHERE i.listing_id = l.id AND i.status = 'ok')) AS photo"
+            f" {BASE} {f} GROUP BY 1, 2, 3, 4 ORDER BY 2",
+            p,
+        ).fetchall()
+        members = {
+            r["key"]: r["group_id"]
+            for r in conn.execute(
+                "SELECT CASE WHEN species_id IS NOT NULL THEN 's' || species_id ELSE 'c' || cultivar_id END AS key, group_id"
+                " FROM grouping_members WHERE grouping_id = %s",
+                (grouping_id,),
+            )
+        }
+    out = []
+    for r in rows:
+        own = members.get(r["key"])
+        out.append(dict(r, price=float(r["price"]) if r["price"] is not None else None, own=own,
+                        species_group=members.get(r["species_key"]) if r["key"].startswith("c") else None))
+    return out

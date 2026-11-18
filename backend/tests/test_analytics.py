@@ -137,7 +137,7 @@ def test_groupings_and_breakdown(data):
     assert [r["key"] for r in rows] == [data["rosita"]]
 
     # Manual grouping: put the cultivar in "Favourites", filter by it everywhere.
-    after = groupings.create(groupings.GroupingIn(name="Picks", kind="manual"))
+    after = groupings.create(groupings.GroupingIn(name="Picks"))["groupings"]
     picks = next(g for g in after if g["name"] == "Picks")
     after = groupings.set_groups(picks["id"], groupings.GroupsIn(groups=[G(name="Favourites")]))
     fav = next(g for g in after if g["id"] == picks["id"])["groups"][0]
@@ -159,3 +159,41 @@ def test_groupings_and_breakdown(data):
         assert analytics.breakdown(by="top", scope=scope, shops=[data["shop"]])["rows"]
     groupings.set_member(picks["id"], groupings.MemberIn(key=data["rosita"], group_id=None))
     groupings.delete(picks["id"])
+
+
+def test_grouping_rework(data):
+    from fastapi import HTTPException
+
+    from app import groupings
+
+    gs = {g["kind"]: g for g in groupings.list_groupings()}
+    for builtin in ("price", "type"):
+        with pytest.raises(HTTPException):
+            groupings.delete(gs[builtin]["id"])
+
+    # Start from Type: the cultivar lands in "Cultivars", the species in "Species".
+    r = groupings.create(groupings.GroupingIn(name="Look-alikes", start="type"))
+    look = next(g for g in r["groupings"] if g["id"] == r["id"])
+    by_name = {g["name"]: g for g in look["groups"]}
+    assert data["rosita"] in {m["key"] for m in by_name["Cultivars"]["members"]}
+    assert data["kerrii"] in {m["key"] for m in by_name["Species"]["members"]}
+
+    rows = {p["key"]: p for p in groupings.plants(look["id"], days=28, shops=[data["shop"]])}
+    assert rows[data["rosita"]]["own"] == by_name["Cultivars"]["id"] and rows[data["rosita"]]["offers"] == 1
+
+    # Bulk move both into one group, then out again.
+    groupings.set_members(look["id"], groupings.BulkIn(keys=[data["rosita"], data["kerrii"]], group_id=by_name["Hybrids"]["id"]))
+    rows = {p["key"]: p for p in groupings.plants(look["id"], days=28, shops=[data["shop"]])}
+    assert {rows[k]["own"] for k in (data["rosita"], data["kerrii"])} == {by_name["Hybrids"]["id"]}
+    groupings.set_members(look["id"], groupings.BulkIn(keys=[data["rosita"]], group_id=None))
+    rows = {p["key"]: p for p in groupings.plants(look["id"], days=28, shops=[data["shop"]])}
+    assert rows[data["rosita"]]["own"] is None
+
+    # Copy keeps groups and members.
+    c = groupings.create(groupings.GroupingIn(name="Look-alikes 2", start=f"copy:{look['id']}"))
+    copy = next(g for g in c["groupings"] if g["id"] == c["id"])
+    assert [g["name"] for g in copy["groups"]] == [g["name"] for g in look["groups"]]
+    assert sum(len(g["members"]) for g in copy["groups"]) == sum(
+        len(g["members"]) for g in next(x for x in groupings.list_groupings() if x["id"] == look["id"])["groups"])
+    groupings.delete(c["id"])
+    groupings.delete(look["id"])

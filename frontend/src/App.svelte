@@ -11,6 +11,7 @@
   import Scatter from './pages/Scatter.svelte';
   import Trends from './pages/Trends.svelte';
   import Groupings from './pages/Groupings.svelte';
+  import GroupingEditor from './pages/GroupingEditor.svelte';
   import ChartWindow from './components/ChartWindow.svelte';
   import { chartWin } from './lib/state.svelte.js';
 
@@ -18,6 +19,12 @@
   let ready = $state(false);
   let page = $state(pageFromHash());
   let taxonKey = $state(keyFromHash());
+  let groupingId = $state(groupingFromHash());
+
+  function groupingFromHash() {
+    const m = location.hash.match(/^#\/groupings\/(new|\d+)/);
+    return m ? m[1] : null;
+  }
 
   function keyFromHash() {
     const m = location.hash.match(/^#\/taxon\/([sc]\d+)/);
@@ -40,6 +47,7 @@
     const onHash = () => {
       page = pageFromHash();
       taxonKey = keyFromHash();
+      groupingId = groupingFromHash();
     };
     window.addEventListener('mt-logout', onLogout);
     window.addEventListener('hashchange', onHash);
@@ -109,6 +117,8 @@
         <Assign onchange={refreshCount} />
       {:else if page === 'species'}
         <Species />
+      {:else if page === 'groupings' && groupingId}
+        {#key groupingId}<GroupingEditor id={groupingId} />{/key}
       {:else if page === 'groupings'}
         <Groupings />
       {/if}
