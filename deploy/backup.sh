@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Nightly database dump, kept 14 days. Called from /etc/cron.d/markettrends-backup.
 set -euo pipefail
+umask 077
 dir=/opt/markettrends/backups
 mkdir -p "$dir"
 file="$dir/markettrends_$(date +%F).sql.gz"
