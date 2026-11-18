@@ -48,7 +48,7 @@ WHERE s.collector = 'pi' AND s.adapter IS NOT NULL
   AND s.status NOT IN ('paused', 'not_allowed')
   AND (s.next_run_after IS NULL OR s.next_run_after <= now())
   AND (s.pi_claimed_at IS NULL OR s.pi_claimed_at < now() - interval '2 hours')
-  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.shop_id = s.id AND r.kind = 'collect'
+  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.shop_id = s.id AND r.kind = 'collect' AND (r.result IS NULL OR r.result IN ('ok', 'broken'))
                   AND (r.started_at AT TIME ZONE 'Europe/Berlin')::date = (now() AT TIME ZONE 'Europe/Berlin')::date)
   AND (s.run_requested_at IS NOT NULL
        OR (s.status IN ('active', 'adapter_broken')
@@ -193,7 +193,7 @@ def check_overdue() -> None:
             "SELECT s.name FROM shops s WHERE s.collector = 'pi' AND s.adapter IS NOT NULL"
             " AND s.status IN ('active', 'adapter_broken')"
             " AND (s.next_run_after IS NULL OR s.next_run_after <= now())"
-            " AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.shop_id = s.id AND r.kind = 'collect'"
+            " AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.shop_id = s.id AND r.kind = 'collect' AND (r.result IS NULL OR r.result IN ('ok', 'broken'))"
             "   AND (r.started_at AT TIME ZONE 'Europe/Berlin')::date = (now() AT TIME ZONE 'Europe/Berlin')::date)"
         ).fetchall()
         seen = conn.execute("SELECT last_seen FROM collectors WHERE name = 'pi'").fetchone()

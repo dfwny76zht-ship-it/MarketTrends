@@ -20,7 +20,7 @@ PROVIDES_KEYS = ("price", "availability", "quantity", "pot_size")
 LIST_SQL = """
 SELECT s.*,
        (SELECT count(*) FROM listings l WHERE l.shop_id = s.id AND l.gone_since IS NULL) AS offers_count,
-       EXISTS (SELECT 1 FROM runs c WHERE c.shop_id = s.id AND c.kind = 'collect'
+       EXISTS (SELECT 1 FROM runs c WHERE c.shop_id = s.id AND c.kind = 'collect' AND (c.result IS NULL OR c.result IN ('ok', 'broken'))
                AND (c.started_at AT TIME ZONE 'Europe/Berlin')::date = (now() AT TIME ZONE 'Europe/Berlin')::date)
            AS collected_today,
        (SELECT last_seen FROM collectors WHERE name = 'pi') AS pi_last_seen,

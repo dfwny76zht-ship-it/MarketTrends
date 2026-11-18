@@ -264,7 +264,7 @@ def nightly() -> None:
         shops = conn.execute(
             "SELECT s.id, s.name, s.url, s.adapter, s.status, s.collector,"
             " (s.next_run_after IS NOT NULL AND s.next_run_after > now()) AS waiting,"
-            " EXISTS (SELECT 1 FROM runs r WHERE r.shop_id = s.id AND r.kind = 'collect'"
+            " EXISTS (SELECT 1 FROM runs r WHERE r.shop_id = s.id AND r.kind = 'collect' AND (r.result IS NULL OR r.result IN ('ok', 'broken'))"
             "   AND (r.started_at AT TIME ZONE 'Europe/Berlin')::date = (now() AT TIME ZONE 'Europe/Berlin')::date)"
             "   AS collected_today"
             " FROM shops s WHERE s.status NOT IN ('paused', 'not_allowed') ORDER BY s.id"
