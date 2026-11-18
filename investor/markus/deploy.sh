@@ -2,7 +2,7 @@
 # Run on Hetzner as markettrends: publish the investor page. The data stays frozen unless REFRESH=1.
 set -euo pipefail
 cd /opt/markettrends/app
-out=/opt/markettrends/markus
+out=/opt/markus-site
 mkdir -p "$out"
 if [ "${REFRESH:-0}" = "1" ] || [ ! -f "$out/data.json" ]; then
     tmp=$(mktemp)
