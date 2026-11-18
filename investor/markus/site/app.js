@@ -153,6 +153,62 @@
     return { chart, draw };
   }
 
+  // Variety as it looks from the offer list: one slice per species (its cultivars and forms merged into it),
+  // sized by the number of offers, independent of stock. Coloured by group so the link to the next charts shows.
+  function speciesName(key, offers) {
+    const own = offers.find((o) => o.plant_key === key);
+    if (own) return own.plant;
+    const p = offers[0].plant;
+    return key.startsWith('s') ? p.split(' ').slice(0, 2).join(' ') : p;
+  }
+  function varietyChart(el, offers) {
+    const chart = echarts.init(el, null, { renderer: 'svg' });
+    const draw = () => {
+      const bySpecies = {};
+      for (const o of offers) (bySpecies[o.species_key] ??= []).push(o);
+      const slices = Object.entries(bySpecies).map(([key, os]) => {
+        const count = {};
+        for (const o of os) count[topOf(o)] = (count[topOf(o)] ?? 0) + 1;
+        const grp = Object.entries(count).sort((a, b) => b[1] - a[1])[0][0];
+        const variants = [...new Set(os.map((o) => o.plant))];
+        return { key, name: speciesName(key, os), value: os.length, grp: grp === 'other' ? 'other' : Number(grp), variants };
+      });
+      const order = (g) => tops.indexOf(g);
+      slices.sort((a, b) => order(a.grp) - order(b.grp) || b.value - a.value || a.name.localeCompare(b.name));
+      const seen = {};
+      const data = slices.map((sl) => {
+        const i = (seen[sl.grp] = (seen[sl.grp] ?? -1) + 1);
+        const base = groups[sl.grp].color;
+        const color = i % 3 === 0 ? base : i % 3 === 1 ? shade(base, 0.18) : tint(base, 0.25);
+        const dim = selected && selected !== sl.grp && groups[selected]?.parent !== sl.grp;
+        return { name: sl.name, value: sl.value, gid: sl.grp, variants: sl.variants, itemStyle: { color, opacity: dim ? 0.35 : 1 } };
+      });
+      chart.setOption({
+        animation: false,
+        tooltip: {
+          trigger: 'item', backgroundColor: '#fff', borderColor: css('--line'), textStyle: { color: css('--ink'), fontSize: 13 },
+          formatter: (p) => {
+            const v = p.data.variants;
+            const list = v.length > 1 ? `<br><span style="color:${css('--muted')}">${v.slice(0, 8).map(esc).join('<br>')}${v.length > 8 ? '<br>…' : ''}</span>` : '';
+            return `${p.marker}<b>${esc(p.name)}</b><br>${p.value} Angebot${p.value > 1 ? 'e' : ''} · ${p.percent} % · ${esc(groups[p.data.gid].name)}${list}`;
+          },
+        },
+        series: [{ type: 'pie', radius: ['44%', '76%'], center: ['50%', '50%'], label: { show: false }, labelLine: { show: false },
+          itemStyle: { borderColor: '#fff', borderWidth: 1.5, borderRadius: 2 }, emphasis: { scale: false }, data }],
+      }, true);
+    };
+    chart.on('click', (p) => p.data?.gid != null && showGroup(p.data.gid));
+    new ResizeObserver(() => { chart.resize(); draw(); }).observe(el);
+    draw();
+    return { chart, draw };
+  }
+  function tint(hex, amount) {
+    const n = parseInt(hex.replace('#', ''), 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (255 - v) * amount));
+    return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  charts.variety = varietyChart($('c-variety'), FA);
   charts.stock = donut($('c-stock'), FA, (o) => o.stock ?? 0, 'Pflanzen');
   charts.value = donut($('c-value'), FA, value, '€');
   charts.retail = donut($('c-retail'), BJ, () => 1, 'Angebote');

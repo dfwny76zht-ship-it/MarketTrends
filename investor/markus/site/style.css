@@ -40,11 +40,22 @@ h3 { font-size: 14px; margin: 0 0 4px; }
 .figure { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
 .fig-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .hint { font-size: 12px; color: var(--muted); }
-.donuts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.flow { display: grid; grid-template-columns: minmax(0, 1fr) 64px minmax(0, 2fr); align-items: center; gap: 4px; }
+body.retail .flow { grid-template-columns: minmax(0, 1fr) 56px minmax(0, 3fr); }
+.donuts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 4px 4px 0; }
 body.retail .donuts { grid-template-columns: repeat(3, 1fr); }
+.arrow { display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--ink-2); }
+.arrow svg { width: 56px; height: 60px; }
+.arrow path { fill: none; stroke: var(--ink-2); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.arrow span { font-size: 12px; text-align: center; line-height: 1.25; }
+@media (max-width: 700px) {
+  .flow, body.retail .flow { grid-template-columns: 1fr; }
+  .arrow svg { transform: rotate(90deg); height: 44px; }
+}
 .retail-only { display: none; }
 body.retail .retail-only { display: block; }
 @media (max-width: 700px) { .donuts, body.retail .donuts { grid-template-columns: 1fr; } }
+body.retail .flow .chart { height: 210px; }
 .dtitle { text-align: center; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .chart { height: 230px; }
 .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; margin-top: 2px; }

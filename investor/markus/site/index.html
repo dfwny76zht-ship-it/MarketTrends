@@ -28,10 +28,17 @@
       <h2 data-edit="fig-title">Pflanzen und Lagerwert je Gruppe</h2>
       <span class="hint">Segment oder Gruppe anklicken für die vollständige Liste</span>
     </div>
-    <div class="donuts" id="donuts">
-      <div class="donut"><div class="dtitle" data-edit="d1">Pflanzen im Bestand</div><div class="chart" id="c-stock"></div></div>
-      <div class="donut"><div class="dtitle" data-edit="d2">Lagerwert (netto)</div><div class="chart" id="c-value"></div></div>
-      <div class="donut retail-only"><div class="dtitle" data-edit="d3">Ben's Jungle: Angebote</div><div class="chart" id="c-retail"></div></div>
+    <div class="flow">
+      <div class="donut first"><div class="dtitle" data-edit="d0">Angebote je Art</div><div class="chart" id="c-variety"></div></div>
+      <div class="arrow" aria-hidden="true">
+        <svg viewBox="0 0 60 120" preserveAspectRatio="none"><path d="M4 60 H46" /><path d="M36 44 L52 60 L36 76" /></svg>
+        <span data-edit="arrow">aber im Bestand</span>
+      </div>
+      <div class="donuts" id="donuts">
+        <div class="donut"><div class="dtitle" data-edit="d1">Pflanzen im Bestand</div><div class="chart" id="c-stock"></div></div>
+        <div class="donut"><div class="dtitle" data-edit="d2">Lagerwert (netto)</div><div class="chart" id="c-value"></div></div>
+        <div class="donut retail-only"><div class="dtitle" data-edit="d3">Ben's Jungle: Angebote</div><div class="chart" id="c-retail"></div></div>
+      </div>
     </div>
     <div class="legend" id="legend"></div>
     <p class="caption" id="caption" data-edit="caption"></p>
