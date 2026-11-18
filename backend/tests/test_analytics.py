@@ -25,9 +25,9 @@ def data(db):
                                   (shop["id"],)).fetchone()["id"]
         when = datetime.now(timezone.utc) - timedelta(days=days_ago)
         offers = [
-            Offer(item_key="r1", name="Hoya 'Rosita'", price=Decimal(price), currency="EUR", availability="available",
-                  quantity=qty, pot_size="6 cm"),
-            Offer(item_key="k1", name="Hoya kerrii variegata", price=Decimal("3.10"), currency="EUR",
+            Offer(item_key="r1", name="Hoya carnosa 'Krimson Queen'", price=Decimal(price), currency="EUR",
+                  availability="available", quantity=qty, pot_size="6 cm"),
+            Offer(item_key="k1", name="Hoya pubicalyx", price=Decimal("3.10"), currency="EUR",
                   availability="available", quantity=50, pot_size="12 cm"),
         ]
         collect._store(shop, run_id, offers, True, now=when)
@@ -38,8 +38,8 @@ def data(db):
     taxonomy.match_pending()
     taxonomy.confirm_likely()
     with db.connection() as conn:
-        rosita = conn.execute("SELECT id FROM cultivars WHERE name = 'Rosita'").fetchone()["id"]
-        kerrii = conn.execute("SELECT id FROM species WHERE epithet = 'kerrii'").fetchone()["id"]
+        rosita = conn.execute("SELECT id FROM cultivars WHERE name = 'Krimson Queen'").fetchone()["id"]
+        kerrii = conn.execute("SELECT id FROM species WHERE epithet = 'pubicalyx'").fetchone()["id"]
     return {"shop": shop["id"], "rosita": f"c{rosita}", "kerrii": f"s{kerrii}"}
 
 
@@ -71,7 +71,7 @@ def test_taxon_page(data):
     pts = t["series"][0]["points"]
     assert [p["quantity"] for p in pts] == [100, 60, 200]
     assert pts[1]["sold_est"] == 40 and pts[2]["restocked"] == 140
-    assert t["title"] == "Hoya 'Rosita'"
+    assert t["title"] == "Hoya carnosa 'Krimson Queen'"
     assert t["sizes"] and t["offers"]
 
 
@@ -82,7 +82,7 @@ def test_scatter_and_events(data):
     assert {p["key"] for p in pts} == {data["rosita"], data["kerrii"]}
     assert next(p for p in pts if p["key"] == data["rosita"])["quantity"] == 200
     ev = analytics.events(days=28, shops=[data["shop"]], kind="restock", limit=50)
-    assert len(ev) == 1 and ev[0]["taxon"] == "Hoya 'Rosita'"
+    assert len(ev) == 1 and ev[0]["taxon"] == "Hoya carnosa 'Krimson Queen'"
 
 
 def test_watchlist(data, db):
@@ -92,6 +92,6 @@ def test_watchlist(data, db):
     assert [w["key"] for w in analytics.watchlist()] == [data["rosita"]]
     with db.connection() as conn:
         lines = analytics.watchlist_events_since(conn, datetime.now(timezone.utc) - timedelta(days=30))
-    assert any("Rosita" in line and "restocked" in line for line in lines)
+    assert any("Krimson Queen" in line and "restocked" in line for line in lines)
     analytics.unwatch(analytics.WatchIn(key=data["rosita"]))
     assert analytics.watchlist() == []

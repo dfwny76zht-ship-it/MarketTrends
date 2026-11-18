@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Run on Hetzner as user markettrends: fetch the newest version and rebuild.
 set -euo pipefail
+# Never restart during the night run (starts 3:00 Berlin; FlorAccess alone takes ~40 min).
+now=$(TZ=Europe/Berlin date +%H%M)
+if [ "${FORCE:-0}" != "1" ] && [ "$now" -ge 0245 ] && [ "$now" -le 0430 ]; then
+    echo "Night run window (02:45-04:30 Berlin): not deploying. Use FORCE=1 to override." >&2
+    exit 1
+fi
 cd /opt/markettrends/app
 git pull --ff-only
 docker compose up -d --build

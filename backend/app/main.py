@@ -27,6 +27,11 @@ scheduler.add_job(
 async def lifespan(app: FastAPI):
     migrate.run()
     pool.open(wait=True)
+    with pool.connection() as conn:  # runs cut off by a restart would otherwise show "Running" forever
+        conn.execute(
+            "UPDATE runs SET finished_at = now(), result = 'error', error = 'interrupted (app restarted)'"
+            " WHERE finished_at IS NULL"
+        )
     taxonomy.seed()
     taxonomy.backfill_size_classes()
     taxonomy.match_pending()
