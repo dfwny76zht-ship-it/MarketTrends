@@ -14,7 +14,8 @@ class Blocked(Exception):
     """The shop answered 403 or 429: stop the run."""
 
     def __init__(self, status: int, url: str):
-        super().__init__(f"{url} answered {status}")
+        reason = "bot check page" if status == 200 else str(status)
+        super().__init__(f"{url} answered {reason}")
         self.status = status
         self.url = url
 

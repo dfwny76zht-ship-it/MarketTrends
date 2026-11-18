@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from psycopg.types.json import Jsonb
 
-from . import checks, fx, ntfy
+from . import checks, fx, names, ntfy, taxonomy
 from .adapters import REGISTRY, Blocked, Disallowed, FetchError, Offer
 from .db import pool
 from .fetching import Fetcher
@@ -130,13 +130,14 @@ def _store(shop: dict, run_id: int, offers: list[Offer], complete: bool) -> int:
             ).fetchone()
             obs_id = conn.execute(
                 "INSERT INTO observations (listing_id, run_id, observed_at, price, currency, price_basis, tier_prices,"
-                " price_eur_net, availability_text, availability, quantity, pot_size, plant_size, raw)"
-                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                " price_eur_net, availability_text, availability, quantity, pot_size, plant_size, raw, size_class)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (
                     listing_id, run_id, now, o.price, o.currency, basis,
                     Jsonb(o.tier_prices) if o.tier_prices else None,
                     _eur_net(o.price, o.currency, basis, shop["vat_rate"]),
                     o.availability_text, o.availability, o.quantity, o.pot_size, o.plant_size, Jsonb(o.raw),
+                    names.size_class(o.pot_size, o.name),
                 ),
             ).fetchone()["id"]
 
@@ -205,7 +206,7 @@ def collect_one(shop_id: int) -> str | None:
     except Blocked as exc:
         days = _backoff(shop_id)
         _finish(run_id, "blocked", f"{exc}; next try in {days} d", http_status=exc.status, pages=fetcher.requests)
-        return f"{name}: blocked ({exc.status}), next try in {days} d"
+        return f"{name}: blocked ({'bot check' if exc.status == 200 else exc.status}), next try in {days} d"
     except (Disallowed, FetchError) as exc:
         _finish(run_id, "error", str(exc), pages=fetcher.requests)
         return f"{name}: {exc}"
@@ -235,6 +236,10 @@ def collect_one(shop_id: int) -> str | None:
         return f"{name}: adapter broken – {problem}"
 
     events = _store(shop, run_id, result.offers, result.complete)
+    try:
+        taxonomy.match_pending(shop_id)
+    except Exception:
+        log.exception("matching species failed for %s", name)
     with pool.connection() as conn:
         recovered = conn.execute(
             "UPDATE shops SET backoff_days = 0, next_run_after = NULL,"

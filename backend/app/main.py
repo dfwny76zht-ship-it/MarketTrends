@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, collect, config, migrate, shops
+from . import auth, collect, config, migrate, shops, taxa, taxonomy
 from .db import pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -27,6 +27,9 @@ scheduler.add_job(
 async def lifespan(app: FastAPI):
     migrate.run()
     pool.open(wait=True)
+    taxonomy.seed()
+    taxonomy.backfill_size_classes()
+    taxonomy.match_pending()
     scheduler.start()
     yield
     scheduler.shutdown(wait=False)
@@ -36,6 +39,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(auth.router)
 app.include_router(shops.router)
+app.include_router(taxa.router)
 
 
 @app.get("/api/health")

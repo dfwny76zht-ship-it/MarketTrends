@@ -127,3 +127,13 @@ def test_floraccess_collect_falls_back_to_tile_on_error():
     assert len(res.offers) == len([t for t in tiles if "hoya" in t["name"].lower()])
     assert res.complete is False
     assert next(o for o in res.offers if o.item_key == "76949").quantity == 4648
+
+
+def test_challenge_pages_are_recognised():
+    import os
+    os.environ.setdefault("DATABASE_URL", "postgresql://unused")
+    from app.fetching import is_challenge
+
+    assert is_challenge(b"<html><title>uhlig-kakteen.de</title><body>Please enable JavaScript to continue.</body></html>")
+    assert is_challenge(b"<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>")
+    assert not is_challenge(gzip.decompress((FIX / "bens_jungle_hoya_p1.html.gz").read_bytes()))

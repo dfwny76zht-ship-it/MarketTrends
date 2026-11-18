@@ -3,40 +3,33 @@
 On the server:  see deploy/test.sh
 """
 
-import os
 from decimal import Decimal
 
 import pytest
 
-if not os.environ.get("TEST_DATABASE_URL"):
-    pytest.skip("TEST_DATABASE_URL not set", allow_module_level=True)
-
-os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
-
-from app import collect, migrate  # noqa: E402
-from app.adapters import Offer  # noqa: E402
-from app.db import pool  # noqa: E402
+from app.adapters import Offer
 
 
 @pytest.fixture(scope="module")
-def shop():
-    migrate.run()
-    pool.open(wait=True)
-    with pool.connection() as conn:
-        s = conn.execute(
+def shop(db):
+    from app import collect  # noqa: F401  (needs DATABASE_URL, set by conftest)
+
+    with db.connection() as conn:
+        return conn.execute(
             "INSERT INTO shops (name, url, host, price_basis, vat_rate) VALUES ('Test', 'https://t.example/', 't.example', 'gross', 7)"
             " RETURNING *"
         ).fetchone()
-    yield s
-    pool.close()
 
 
 def run(shop, offers, complete=True):
+    from app import collect
+    from app.db import pool
+
     with pool.connection() as conn:
         run_id = conn.execute(
             "INSERT INTO runs (shop_id, kind) VALUES (%s, 'collect') RETURNING id", (shop["id"],)
         ).fetchone()["id"]
-    collect._store(shop, run_id, offers, complete)
+    collect._store(shop, run_id, offers, complete)  # noqa
     with pool.connection() as conn:
         rows = conn.execute(
             "SELECT l.item_key, e.kind, e.old_value, e.new_value FROM events e JOIN listings l ON l.id = e.listing_id"
@@ -80,8 +73,8 @@ def test_event_sequence(shop):
     assert ev == {("B", "back_in_stock"): ("gone", "available")}
 
 
-def test_net_price(shop):
-    with pool.connection() as conn:
+def test_net_price(shop, db):
+    with db.connection() as conn:
         row = conn.execute(
             "SELECT o.price_eur_net FROM observations o JOIN listings l ON l.id = o.listing_id"
             " WHERE l.shop_id = %s AND l.item_key = 'A' ORDER BY o.observed_at LIMIT 1",
