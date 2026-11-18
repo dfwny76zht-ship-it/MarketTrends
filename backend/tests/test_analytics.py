@@ -55,7 +55,7 @@ def test_overview(data):
 def test_taxa_table(data):
     from app import analytics
 
-    rows = analytics.taxa(days=28, level="species", shops=[data["shop"]], size=None, keys=None)
+    rows = analytics.taxa(days=28, level="cultivar", shops=[data["shop"]], size=None, keys=None)
     by_key = {r["key"]: r for r in rows}
     assert data["rosita"] in by_key and data["kerrii"] in by_key
     assert by_key[data["rosita"]]["quantity"] == 200
@@ -78,8 +78,10 @@ def test_taxon_page(data):
 def test_scatter_and_events(data):
     from app import analytics
 
-    pts = analytics.scatter(days=0, level="species", shops=[data["shop"]], size=None)
+    pts = analytics.scatter(days=0, level="cultivar", shops=[data["shop"]], size=None)
     assert {p["key"] for p in pts} == {data["rosita"], data["kerrii"]}
+    by_species = analytics.scatter(days=0, level="species", shops=[data["shop"]], size=None)
+    assert data["rosita"] not in {p["key"] for p in by_species}  # counted under Hoya carnosa
     assert next(p for p in pts if p["key"] == data["rosita"])["quantity"] == 200
     ev = analytics.events(days=28, shops=[data["shop"]], kind="restock", limit=50)
     assert len(ev) == 1 and ev[0]["taxon"] == "Hoya carnosa 'Krimson Queen'"
