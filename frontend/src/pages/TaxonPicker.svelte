@@ -35,6 +35,16 @@
       .slice(0, 8),
   );
 
+  function setKind(k) {
+    if (k === 'hybrid') {
+      if (!hybrid && !cultivarText.trim()) cultivarText = speciesText.trim().replace(/^./, (c) => c.toUpperCase());
+      hybrid = true;
+    } else {
+      hybrid = false;
+      kind = k;
+    }
+  }
+
   function save(e) {
     e.preventDefault();
     onsave({
@@ -46,8 +56,6 @@
 </script>
 
 <form class="picker" onsubmit={save}>
-  <label class="check"><input type="checkbox" bind:checked={hybrid} /> Hybrid, no single species</label>
-
   {#if !hybrid}
     <label>
       Species
@@ -63,7 +71,10 @@
             {s.epithet}{#if s.in_lims} ·lab{/if}
           </button>
         {/each}
-        {#if !exact}<span class="badge warn">new species</span>{/if}
+        {#if !exact}
+          <span class="badge warn">new species</span>
+          <button type="button" onclick={() => setKind('hybrid')}>Hoya '{speciesText.trim()}' as hybrid</button>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -73,14 +84,13 @@
       {hybrid ? 'Hybrid name' : 'Cultivar / form'}
       <input bind:value={cultivarText} placeholder={hybrid ? 'Rosita' : 'optional'} autocomplete="off" />
     </label>
-    {#if !hybrid}
-      <label>
-        Kind
-        <select bind:value={kind}>
-          {#each ['cultivar', 'form', 'subspecies'] as k}<option value={k}>{KINDS[k]}</option>{/each}
-        </select>
-      </label>
-    {/if}
+    <label>
+      Kind
+      <select value={hybrid ? 'hybrid' : kind} onchange={(e) => setKind(e.target.value)}>
+        {#each ['cultivar', 'form', 'subspecies'] as k}<option value={k}>{KINDS[k]}</option>{/each}
+        <option value="hybrid">Hybrid, no single species</option>
+      </select>
+    </label>
   </div>
   {#if cultivarChips.length}
     <div class="chips">
@@ -103,8 +113,6 @@
   .picker { display: grid; gap: 8px; padding: 10px; background: var(--surface-2); border-radius: var(--radius); }
   label { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
   label :global(input), label :global(select) { color: var(--text); font-size: 15px; }
-  .check { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; }
-  .check input { width: auto; }
   .row { display: flex; align-items: center; gap: 6px; }
   .prefix { color: var(--text); font-style: italic; }
   .two { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
