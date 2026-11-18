@@ -26,6 +26,7 @@ services:
       - "127.0.0.1:8090:8000"
     volumes:
       - snapshots:/data/snapshots
+      - /opt/markus-site:/markus
     depends_on:
       db:
         condition: service_healthy

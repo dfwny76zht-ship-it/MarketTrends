@@ -108,3 +108,17 @@ tr.hl td { background: #fbf6e8; }
   .scroll { max-height: none; overflow: visible; }
   .figure, .card, .spectrum div { break-inside: avoid; }
 }
+
+/* edit version (only under /markus-edit, behind the Market Trends login) */
+.editbar { position: sticky; top: 0; z-index: 50; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding: 8px 16px; background: #1d211e; color: #fff; font-size: 14px; }
+.editbar span { color: #c9cfca; flex: 1; }
+.editbar button { font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 6px; border: 1px solid #555; background: #2b302c; color: #fff; cursor: pointer; }
+.editbar button.primary { background: #5fae84; border-color: #5fae84; color: #0e1a12; font-weight: 600; }
+.editbar button:disabled { opacity: .45; cursor: default; }
+.editbar a { color: #9fd4b4; font-size: 13px; }
+body.editing [data-edit] { outline: 1px dashed #b9c2bb; outline-offset: 2px; border-radius: 2px; cursor: text; }
+body.editing [data-edit]:hover { outline-color: #2f6f4e; }
+body.editing [data-edit]:focus { outline: 2px solid #2f6f4e; background: #fffef6; }
+body.editing [data-edit].edited { outline-color: #d39a2b; }
+@media print { .editbar { display: none; } body.editing [data-edit] { outline: none; } }

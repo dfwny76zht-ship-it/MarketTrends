@@ -10,8 +10,8 @@
 <body>
 <main>
   <header class="head">
-    <div class="kicker">GeniScent · Marktanalyse Hoya</div>
-    <h1>FlorAccess im Kontext</h1>
+    <div class="kicker" data-edit="kicker">GeniScent · Marktanalyse Hoya</div>
+    <h1 data-edit="title">FlorAccess im Kontext</h1>
     <div class="meta">
       <span>Stand 18.11.2026 · eigene Marktbeobachtung</span>
       <label class="switch"><input type="checkbox" id="retail"> Einzelhandel einblenden (Ben's Jungle)</label>
@@ -19,43 +19,43 @@
     </div>
   </header>
 
-  <p class="lead" id="lead"></p>
+  <p class="lead" id="lead" data-edit="lead"></p>
 
   <section class="tiles" id="tiles"></section>
 
   <section class="figure">
     <div class="fig-head">
-      <h2>Pflanzen und Lagerwert je Gruppe</h2>
+      <h2 data-edit="fig-title">Pflanzen und Lagerwert je Gruppe</h2>
       <span class="hint">Segment oder Gruppe anklicken für die vollständige Liste</span>
     </div>
     <div class="donuts" id="donuts">
-      <div class="donut"><div class="dtitle">Pflanzen im Bestand</div><div class="chart" id="c-stock"></div></div>
-      <div class="donut"><div class="dtitle">Lagerwert (netto)</div><div class="chart" id="c-value"></div></div>
-      <div class="donut retail-only"><div class="dtitle">Ben's Jungle: Angebote</div><div class="chart" id="c-retail"></div></div>
+      <div class="donut"><div class="dtitle" data-edit="d1">Pflanzen im Bestand</div><div class="chart" id="c-stock"></div></div>
+      <div class="donut"><div class="dtitle" data-edit="d2">Lagerwert (netto)</div><div class="chart" id="c-value"></div></div>
+      <div class="donut retail-only"><div class="dtitle" data-edit="d3">Ben's Jungle: Angebote</div><div class="chart" id="c-retail"></div></div>
     </div>
     <div class="legend" id="legend"></div>
-    <p class="caption" id="caption"></p>
+    <p class="caption" id="caption" data-edit="caption"></p>
     <div class="grouplist" id="grouplist" hidden></div>
   </section>
 
   <section class="cards">
     <article class="card">
-      <h3>Kerrii: meist Einzelblätter</h3>
-      <p id="kerrii"></p>
+      <h3 data-edit="kerrii-title">Kerrii: meist Einzelblätter</h3>
+      <p id="kerrii" data-edit="kerrii"></p>
     </article>
     <article class="card">
-      <h3>Carnosa: Masse statt Vielfalt</h3>
-      <p id="carnosa"></p>
+      <h3 data-edit="carnosa-title">Carnosa: Masse statt Vielfalt</h3>
+      <p id="carnosa" data-edit="carnosa"></p>
     </article>
     <article class="card">
-      <h3>Medianpreis je Gruppe</h3>
+      <h3 data-edit="medians-title">Medianpreis je Gruppe</h3>
       <table class="mini" id="medians"></table>
     </article>
   </section>
 
   <section class="block">
-    <h2>Großhandel und Endkundenpreise</h2>
-    <p id="prices"></p>
+    <h2 data-edit="prices-title">Großhandel und Endkundenpreise</h2>
+    <p id="prices" data-edit="prices"></p>
     <details id="compare">
       <summary id="compare-sum"></summary>
       <div class="scroll"><table class="list" id="compare-table"></table></div>
@@ -63,31 +63,31 @@
   </section>
 
   <section class="block">
-    <h2>Import und Wildentnahme</h2>
-    <p id="origin"></p>
+    <h2 data-edit="origin-title">Import und Wildentnahme</h2>
+    <p id="origin" data-edit="origin"></p>
     <details>
       <summary id="origin-sum"></summary>
       <div class="filters" id="origin-filters"></div>
       <div class="scroll"><table class="list sortable" id="origin-table"></table></div>
-      <p class="note">Linie = gleiche Topfgröße und Höhe mit wiederkehrenden Preisen, vermutlich dieselbe Quelle.
+      <p class="note" data-edit="origin-note">Linie = gleiche Topfgröße und Höhe mit wiederkehrenden Preisen, vermutlich dieselbe Quelle.
         Belegen lässt sich die Herkunft nur über Feld D des Pflanzenpasses (Ursprungsland).</p>
     </details>
   </section>
 
   <section class="block conclusion">
-    <h2>Einordnung</h2>
+    <h2 data-edit="conclusion-title">Einordnung</h2>
     <div class="spectrum">
-      <div><strong>Importeure (Südostasien, Pazifik)</strong><span>selten und gefragt, aber Luftfracht, Zoll,
+      <div><strong data-edit="spec1-title">Importeure (Südostasien, Pazifik)</strong><span data-edit="spec1">selten und gefragt, aber Luftfracht, Zoll,
         Pflanzengesundheitszeugnis und hohe Ausfälle</span></div>
-      <div class="me"><strong>GeniScent</strong><span>seltene Arten aus Gewebekultur, lokal und rückverfolgbar</span></div>
-      <div><strong>FlorAccess</strong><span>verlässlich lieferbar, aber im Kern Carnosa und Kerrii</span></div>
+      <div class="me"><strong data-edit="spec2-title">GeniScent</strong><span data-edit="spec2">seltene Arten aus Gewebekultur, lokal und rückverfolgbar</span></div>
+      <div><strong data-edit="spec3-title">FlorAccess</strong><span data-edit="spec3">verlässlich lieferbar, aber im Kern Carnosa und Kerrii</span></div>
     </div>
-    <p id="geniscent" class="todo">[Was GeniScent daraus macht – Text folgt]</p>
+    <p id="geniscent" class="todo" data-edit="geniscent">[Was GeniScent daraus macht – Text folgt]</p>
   </section>
 
   <footer class="foot">
-    <p id="method"></p>
-    <p class="sources">Quellen:
+    <p id="method" data-edit="method"></p>
+    <p class="sources" data-edit="sources">Quellen:
       <a href="https://www.floraccess.com/en/category/571/hoya/" rel="noopener noreferrer">FlorAccess, Kategorie Hoya</a> ·
       <a href="https://bens-jungle.com/Hoya" rel="noopener noreferrer">Ben's Jungle, Hoya</a> ·
       <a href="https://www.janeperrone.com/blog/2022/3/11/the-problem-with-the-sweetheart-plant-hoya-kerrii" rel="noopener noreferrer">Jane Perrone: The problem with the sweetheart plant</a> ·

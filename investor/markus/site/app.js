@@ -304,4 +304,69 @@
   };
   sw.onchange = apply;
   apply();
+
+  // ---------- hand-edited texts (texts/texts.json) and the edit version ----------
+  const texts = await fetch('texts/texts.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+  const auto = {};
+  for (const el of document.querySelectorAll('[data-edit]')) {
+    const k = el.dataset.edit;
+    auto[k] = el.innerHTML;
+    if (texts[k] != null) el.innerHTML = texts[k];
+    if (k === 'geniscent' && texts[k]) el.classList.remove('todo');
+  }
+  if (location.pathname.startsWith('/markus-edit')) editMode(texts, auto);
+
+  function editMode(saved, automatic) {
+    document.body.classList.add('editing');
+    const pending = {};
+    let focused = null;
+    const bar = document.createElement('div');
+    bar.className = 'editbar';
+    bar.innerHTML = `<strong>Bearbeiten</strong><span id="eb-state">In einen Text klicken und ändern.</span>
+      <button id="eb-reset" disabled>Text auf automatisch</button>
+      <button id="eb-save" class="primary" disabled>Speichern</button>
+      <a href="https://geniscent.duckdns.org:8446/" target="_blank" rel="noopener">Markus-Ansicht</a>`;
+    document.body.prepend(bar);
+    const state = $('eb-state');
+    const update = () => {
+      const n = Object.keys(pending).length;
+      $('eb-save').disabled = !n;
+      state.textContent = n ? `${n} ungespeicherte Änderung${n > 1 ? 'en' : ''}` : 'Alles gespeichert.';
+    };
+    for (const el of document.querySelectorAll('[data-edit]')) {
+      const k = el.dataset.edit;
+      el.contentEditable = 'true';
+      el.spellcheck = true;
+      el.classList.toggle('edited', saved[k] != null);
+      el.addEventListener('focus', () => { focused = el; $('eb-reset').disabled = false; });
+      el.addEventListener('input', () => { pending[k] = el.innerHTML; el.classList.add('edited'); update(); });
+      el.addEventListener('click', (e) => e.target.closest('a') && e.preventDefault());
+    }
+    $('eb-reset').onclick = () => {
+      if (!focused) return;
+      const k = focused.dataset.edit;
+      focused.innerHTML = automatic[k];
+      focused.classList.remove('edited');
+      if (k === 'geniscent') focused.classList.add('todo');
+      pending[k] = null;
+      update();
+    };
+    $('eb-save').onclick = async () => {
+      $('eb-save').disabled = true;
+      state.textContent = 'Speichere …';
+      try {
+        const r = await fetch('/api/markus/texts', { method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texts: pending }) });
+        if (!r.ok) throw new Error(`Fehler ${r.status}`);
+        const now = await r.json();
+        for (const k of Object.keys(pending)) delete pending[k];
+        for (const el of document.querySelectorAll('[data-edit]')) el.classList.toggle('edited', now[el.dataset.edit] != null);
+        state.textContent = 'Gespeichert. Markus sieht jetzt diese Fassung.';
+      } catch (e) {
+        state.textContent = `Nicht gespeichert: ${e.message}`;
+        $('eb-save').disabled = false;
+      }
+    };
+    window.addEventListener('beforeunload', (e) => { if (Object.keys(pending).length) e.preventDefault(); });
+  }
 })();
