@@ -26,6 +26,7 @@
       currency: s.currency ?? '',
       price_basis: s.price_basis ?? '',
       vat_rate: s.vat_rate != null ? Number(s.vat_rate) : 7,
+      collector: s.collector ?? 'hetzner',
       access: s.access,
       provides: Object.fromEntries(Object.keys(PROVIDES).map((k) => [k, !!s.provides?.[k]])),
       note: s.note,
@@ -69,6 +70,7 @@
       currency: f.currency || null,
       price_basis: f.price_basis || null,
       vat_rate: f.vat_rate === '' || f.vat_rate == null ? null : Number(f.vat_rate),
+      collector: f.collector,
       access: f.access,
       provides: f.provides,
       note: f.note,
@@ -132,7 +134,7 @@
     <div class="actions-top">
       {#if shop.adapter}
         <button class="primary" onclick={() => start('collect')} disabled={!!waitingFor || shop.collected_today}>
-          {waitingFor === 'collect' ? 'Collecting…' : shop.collected_today ? 'Collected today' : 'Run now'}
+          {waitingFor === 'collect' ? (shop.collector === 'pi' ? 'Waiting for the Pi…' : 'Collecting…') : shop.collected_today ? 'Collected today' : 'Run now'}
         </button>
       {/if}
       <button onclick={() => start('robots')} disabled={!!waitingFor}>
@@ -195,6 +197,13 @@
           </select>
         </label>
         <label>Terms checked <input type="date" bind:value={form.terms_checked_at} /></label>
+        <label>
+          Collected by
+          <select bind:value={form.collector}>
+            <option value="hetzner">Server (Hetzner)</option>
+            <option value="pi">Lab Pi</option>
+          </select>
+        </label>
         <fieldset class="wide">
           <legend>Shop shows</legend>
           {#each Object.entries(PROVIDES) as [k, v]}
@@ -205,6 +214,7 @@
         {#if shop.adapter}
           <div class="wide meta">
             Adapter: {shop.adapter}{#if shop.crawl_delay} · crawl-delay {Number(shop.crawl_delay)} s{/if}
+            {#if shop.collector === 'pi'} · Pi last contact {shop.pi_last_seen ? when(shop.pi_last_seen) : 'never'}{/if}
             {#if shop.next_run_after} · paused until {when(shop.next_run_after)}{/if}
           </div>
         {/if}

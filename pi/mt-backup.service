@@ -1,0 +1,11 @@
+[Unit]
+Description=Market Trends backup copy from Hetzner (database dumps and raw pages)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=mtcollector
+ExecStart=/usr/bin/rsync -a --delete -e "ssh -i /opt/mtcollector/.ssh/backup_key -p 443 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/opt/mtcollector/.ssh/known_hosts" markettrends@62.238.33.129:/ /opt/mtcollector/backup/
+Nice=15
+IOSchedulingClass=idle

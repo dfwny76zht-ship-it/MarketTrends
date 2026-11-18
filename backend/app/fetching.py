@@ -10,18 +10,8 @@ import httpx
 
 from . import config
 from .adapters import Blocked, Disallowed, FetchError
+from .adapters.base import is_challenge  # noqa: F401  (re-exported for tests)
 from .db import pool
-
-
-# Bot-protection pages that come back with HTTP 200 instead of the shop's content.
-CHALLENGE_MARKERS = ("please enable javascript to continue", "<title>just a moment...</title>", "cf-challenge", "_cf_chl_opt")
-
-
-def is_challenge(body: bytes) -> bool:
-    if len(body) > 60_000:
-        return False
-    head = body[:60_000].decode("utf-8", errors="replace").lower()
-    return any(m in head for m in CHALLENGE_MARKERS)
 
 
 class Fetcher:

@@ -1,0 +1,20 @@
+[Unit]
+Description=Market Trends collector (fetches due shops for Hetzner)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=mtcollector
+EnvironmentFile=/opt/mtcollector/.env
+ExecStart=/opt/mtcollector/venv/bin/python /opt/mtcollector/mt_collector.py
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=300M
+CPUQuota=50%
+TimeoutStartSec=3h
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mtcollector

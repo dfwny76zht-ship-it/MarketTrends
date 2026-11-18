@@ -154,7 +154,7 @@
             <tr class:selected={s.id === selectedId} onclick={() => select(s.id)}>
               <td>
                 <div class="name">{s.name}</div>
-                <div class="host muted">{s.host}</div>
+                <div class="host muted">{s.host}{#if s.collector === 'pi'} · via Pi{/if}</div>
               </td>
               <td>{TYPES[s.type] ?? ''}</td>
               <td><span class="badge {statusTone(s.status)}">{STATUSES[s.status]}</span></td>

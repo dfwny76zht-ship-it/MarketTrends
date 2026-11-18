@@ -23,6 +23,7 @@ SELECT s.*,
        EXISTS (SELECT 1 FROM runs c WHERE c.shop_id = s.id AND c.kind = 'collect'
                AND (c.started_at AT TIME ZONE 'Europe/Berlin')::date = (now() AT TIME ZONE 'Europe/Berlin')::date)
            AS collected_today,
+       (SELECT last_seen FROM collectors WHERE name = 'pi') AS pi_last_seen,
        r.kind AS last_run_kind, r.started_at AS last_run_at, r.finished_at AS last_run_finished_at,
        r.result AS last_run_result, r.error AS last_run_error
 FROM shops s
@@ -103,6 +104,7 @@ class ShopPatch(BaseModel):
     note: str | None = None
     terms_checked_at: dt.date | None = None
     vat_rate: float | None = None
+    collector: Literal["hetzner", "pi"] | None = None
 
 
 @router.patch("/{shop_id}")
@@ -112,7 +114,7 @@ def update_shop(shop_id: int, body: ShopPatch):
         raise HTTPException(422, "Name can't be empty.")
     if changes.get("status") is None:
         changes.pop("status", None)
-    for key in ("access", "vat_rate"):
+    for key in ("access", "vat_rate", "collector"):
         if key in changes and changes[key] is None:
             changes.pop(key)
     if "vat_rate" in changes and not 0 <= changes["vat_rate"] <= 30:
@@ -158,6 +160,10 @@ def run_now(shop_id: int):
         raise HTTPException(409, "This shop has no adapter yet.")
     if shop["collected_today"]:
         raise HTTPException(409, "Already collected today.")
+    if shop["collector"] == "pi":
+        with pool.connection() as conn:
+            conn.execute("UPDATE shops SET run_requested_at = now(), pi_claimed_at = NULL WHERE id = %s", (shop_id,))
+        return {"started": True, "via": "pi"}
     collect.collect_in_background(shop_id)
     return {"started": True}
 

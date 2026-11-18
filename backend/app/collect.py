@@ -217,12 +217,18 @@ def collect_one(shop_id: int) -> str | None:
     finally:
         fetcher.close()
 
+    return _conclude(shop, run_id, adapter, result, fetcher.requests, {"unchanged_pages": fetcher.unchanged})
+
+
+def _conclude(shop: dict, run_id: int, adapter, result, pages: int, extra: dict) -> str | None:
+    """Shared end of a collection run (Hetzner or Pi): health check, store, species matching, finish."""
+    shop_id, name = shop["id"], shop["name"]
     details = {
         "adapter": f"{adapter.key} v{adapter.version}",
         "expected_total": result.expected_total,
         "complete": result.complete,
-        "unchanged_pages": fetcher.unchanged,
         "errors": result.errors[:20],
+        **extra,
     }
     n = len({o.item_key for o in result.offers})
     problem = _health_problem(shop_id, n, len(result.errors))
@@ -232,7 +238,7 @@ def collect_one(shop_id: int) -> str | None:
                 "UPDATE shops SET status = 'adapter_broken', updated_at = now() WHERE id = %s AND status = 'active'",
                 (shop_id,),
             )
-        _finish(run_id, "broken", problem, offers=n, pages=fetcher.requests, details=details)
+        _finish(run_id, "broken", problem, offers=n, pages=pages, details=details)
         return f"{name}: adapter broken – {problem}"
 
     events = _store(shop, run_id, result.offers, result.complete)
@@ -247,8 +253,7 @@ def collect_one(shop_id: int) -> str | None:
             " WHERE id = %s RETURNING (%s = 'adapter_broken') AS recovered",
             (shop_id, shop["status"]),
         ).fetchone()["recovered"]
-    _finish(run_id, "ok", "; ".join(result.errors[:3]) or None, offers=n, events=events,
-            pages=fetcher.requests, details=details)
+    _finish(run_id, "ok", "; ".join(result.errors[:3]) or None, offers=n, events=events, pages=pages, details=details)
     return f"{name}: adapter works again ({n} offers)" if recovered else None
 
 
@@ -257,7 +262,7 @@ def nightly() -> None:
     started = datetime.now(timezone.utc)
     with pool.connection() as conn:
         shops = conn.execute(
-            "SELECT s.id, s.name, s.url, s.adapter, s.status,"
+            "SELECT s.id, s.name, s.url, s.adapter, s.status, s.collector,"
             " (s.next_run_after IS NOT NULL AND s.next_run_after > now()) AS waiting,"
             " EXISTS (SELECT 1 FROM runs r WHERE r.shop_id = s.id AND r.kind = 'collect'"
             "   AND (r.started_at AT TIME ZONE 'Europe/Berlin')::date = (now() AT TIME ZONE 'Europe/Berlin')::date)"
@@ -267,6 +272,8 @@ def nightly() -> None:
     problems = []
     with checks.run_lock:
         for shop in shops:
+            if shop["collector"] == "pi":
+                continue  # collected by the Pi, which asks for its jobs itself
             try:
                 if shop["adapter"] and shop["status"] in COLLECT_STATUSES:
                     if shop["waiting"] or shop["collected_today"]:
