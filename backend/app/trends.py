@@ -6,7 +6,7 @@ import logging
 from collections import defaultdict
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from . import ntfy
 from . import filters as flt
@@ -203,3 +203,133 @@ def weekly_summary() -> None:
     except Exception:
         log.exception("weekly summary failed")
 
+
+
+# ---------- history (step 8): archive + live, for the development chart on the Trends page ----------
+
+HIST_BASE = """
+FROM observations o
+JOIN listings l ON l.id = o.listing_id
+JOIN shops sh ON sh.id = l.shop_id
+JOIN assignments a ON a.listing_id = l.id AND a.confirmed AND NOT a.ignored
+LEFT JOIN species s ON s.id = a.species_id
+LEFT JOIN cultivars c ON c.id = a.cultivar_id
+WHERE o.price_eur_net IS NOT NULL AND o.observed_at >= '2018-01-01'
+"""
+
+
+def _hist_where(conn, shops, types, group):
+    fl = flt.make(0, shops, None, "ever", types, group)
+    return flt.where(conn, fl, "obs", period=False)
+
+
+@router.get("/history/taxa")
+def history_taxa(level: str = "species", shops: list[int] | None = Query(None)):
+    """Species / cultivars that have archive points, most first (for the 'same product' picker)."""
+    with pool.connection() as conn:
+        f, p = _hist_where(conn, shops, None, None)
+        rows = conn.execute(
+            f"SELECT {_key(level)} AS key, {_name(level)} AS name, count(*) FILTER (WHERE o.source = 'archive') AS archive,"
+            " count(DISTINCT to_char(o.observed_at, 'YYYY')) AS years"
+            f" {HIST_BASE} {f} GROUP BY 1, 2 HAVING count(*) FILTER (WHERE o.source = 'archive') > 0 ORDER BY 3 DESC, 2",
+            p,
+        ).fetchall()
+    return rows
+
+
+@router.get("/history/product")
+def history_product(key: str, level: str = "species", shops: list[int] | None = Query(None)):
+    """Same product over time: one line per format (pot + height), archive and live points,
+    live days merged to one point per month (median)."""
+    with pool.connection() as conn:
+        f, p = _hist_where(conn, shops, None, None)
+        rows = conn.execute(
+            f"SELECT coalesce(o.pot_size, '?') AS pot, coalesce(o.plant_size, '?') AS height, o.source,"
+            " to_char(o.observed_at, 'YYYY-MM') AS month, percentile_cont(0.5) WITHIN GROUP (ORDER BY o.price_eur_net) AS price,"
+            " min(o.price_eur_net) AS low, max(o.price_eur_net) AS high, count(*) AS n,"
+            " string_agg(DISTINCT o.grower, ', ') AS growers, string_agg(DISTINCT o.raw->>'page', ', ') AS pages,"
+            " string_agg(DISTINCT l.name, ' | ') AS offer_names"
+            f" {HIST_BASE} AND {_key(level)} = %s {f} GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 4",
+            [key] + p,
+        ).fetchall()
+        name = conn.execute(f"SELECT {_name(level)} AS name {HIST_BASE} AND {_key(level)} = %s LIMIT 1", [key]).fetchone()
+    formats: dict[str, dict] = {}
+    for r in rows:
+        k = f"{r['pot']} / {r['height']}"
+        fm = formats.setdefault(k, {"format": k, "pot": r["pot"], "height": r["height"], "points": []})
+        fm["points"].append({"month": r["month"], "price": _num(r["price"]), "low": _num(r["low"]), "high": _num(r["high"]),
+                             "source": r["source"], "growers": r["growers"], "pages": r["pages"], "names": r["offer_names"]})
+
+    def pot_cm(s):
+        try:
+            return float(s.split()[0])
+        except (ValueError, IndexError):
+            return 999.0
+
+    out = sorted(formats.values(), key=lambda fm: (pot_cm(fm["pot"]), fm["height"]))
+    return {"name": name["name"] if name else key, "formats": out}
+
+
+@router.get("/history/variety")
+def history_variety(level: str = "species", shops: list[int] | None = Query(None), types: list[str] | None = Query(None),
+                    group: list[int] | None = Query(None)):
+    """Offers and species per month. A month counts as complete when a full category page (or the live
+    collection) was seen; otherwise the numbers are only what the archive happened to keep ('at least')."""
+    with pool.connection() as conn:
+        f, p = _hist_where(conn, shops, types, group)
+        rows = conn.execute(
+            f"SELECT to_char(o.observed_at, 'YYYY-MM') AS month, count(DISTINCT l.id) AS offers,"
+            f" count(DISTINCT {_key(level)}) AS taxa, count(DISTINCT o.grower) AS growers,"
+            " bool_or(o.source = 'live' OR o.raw->>'page' = 'category page') AS complete"
+            f" {HIST_BASE} {f} GROUP BY 1 ORDER BY 1",
+            p,
+        ).fetchall()
+    return rows
+
+
+@router.get("/history/growers")
+def history_growers(shops: list[int] | None = Query(None), types: list[str] | None = Query(None),
+                    group: list[int] | None = Query(None)):
+    """Offers per grower and year (only where the grower is known, i.e. archive pages)."""
+    with pool.connection() as conn:
+        f, p = _hist_where(conn, shops, types, group)
+        rows = conn.execute(
+            f"SELECT to_char(o.observed_at, 'YYYY') AS year, o.grower, count(DISTINCT l.id) AS offers"
+            f" {HIST_BASE} AND o.grower IS NOT NULL {f} GROUP BY 1, 2 ORDER BY 1, 3 DESC",
+            p,
+        ).fetchall()
+    return rows
+
+
+@router.get("/history/groups")
+def history_groups(by: int, shops: list[int] | None = Query(None), types: list[str] | None = Query(None)):
+    """Median net price per year for each group of a grouping (carnosa-like …)."""
+    with pool.connection() as conn:
+        grouping = flt.load_groupings(conn, [by]).get(by)
+        if not grouping:
+            raise HTTPException(404, "Grouping not found.")
+        f, p = _hist_where(conn, shops, types, None)
+        rows = conn.execute(
+            f"SELECT to_char(o.observed_at, 'YYYY') AS year, ({flt.group_expr(grouping, 'o.price_eur_net')})::text AS g,"
+            " percentile_cont(0.5) WITHIN GROUP (ORDER BY o.price_eur_net) AS price, count(DISTINCT l.id) AS offers,"
+            " bool_or(o.source = 'archive') AS archive"
+            f" {HIST_BASE} {f} GROUP BY 1, 2 ORDER BY 1",
+            p,
+        ).fetchall()
+    groups = [{"id": str(g["id"]), "name": g["label"]} for g in grouping["groups"]]
+    return {"groups": groups + [{"id": "other", "name": "Other"}],
+            "rows": [dict(r, g=r["g"] or "other", price=_num(r["price"])) for r in rows]}
+
+
+@router.get("/history/sources")
+def history_sources(shops: list[int] | None = Query(None)):
+    """How many points come from which archive page type and from live collection (for the source line)."""
+    with pool.connection() as conn:
+        f, p = _hist_where(conn, shops, None, None)
+        rows = conn.execute(
+            f"SELECT o.source, coalesce(o.raw->>'page', 'live collection') AS page, count(*) AS n,"
+            " min(o.observed_at)::date::text AS first, max(o.observed_at)::date::text AS last"
+            f" {HIST_BASE} {f} GROUP BY 1, 2 ORDER BY 1, 2",
+            p,
+        ).fetchall()
+    return rows

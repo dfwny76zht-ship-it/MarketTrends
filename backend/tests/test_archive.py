@@ -77,3 +77,22 @@ def test_import_and_reference(db):
     st = {(r["name"], r["pot_cm"]): r["status"] for r in res["rows"]}
     assert st[("Hoya carnosa 'Tricolor'", 5.5)] == "match"
     assert st[("Hoya carnosa 'Tricolor'", 12.0)] == "price differs"
+
+
+def test_history_endpoints(db):
+    from app import taxonomy, trends
+
+    with db.connection() as conn:
+        shop = conn.execute("SELECT id FROM shops WHERE host = 'fa.example'").fetchone()["id"]
+    taxonomy.seed()
+    taxonomy.match_pending(shop)
+    taxonomy.confirm_likely()
+    v = trends.history_variety(shops=[shop])
+    assert v and v[0]["month"] == "2019-08" and v[0]["complete"] and v[0]["growers"] >= 1
+    g = trends.history_growers(shops=[shop])
+    assert any(r["grower"] == "Van der Velden" for r in g)
+    t = trends.history_taxa(shops=[shop])
+    assert t
+    p = trends.history_product(key=t[0]["key"], shops=[shop])
+    assert p["formats"] and all(pt["source"] == "archive" for fm in p["formats"] for pt in fm["points"])
+    assert trends.history_sources(shops=[shop])[0]["page"] == "category page"

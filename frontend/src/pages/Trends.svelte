@@ -5,6 +5,7 @@
   import FilterBar from '../components/FilterBar.svelte';
   import Chart from '../components/Chart.svelte';
   import Sparkline from '../components/Sparkline.svelte';
+  import HistoryPanel from '../components/HistoryPanel.svelte';
 
   let rk = $state(null);
   let sc = $state(null);
@@ -64,6 +65,8 @@
 <h1>Trends</h1>
 <FilterBar level size />
 {#if error}<p class="error">{error}</p>{/if}
+
+<HistoryPanel />
 
 {#if rk}
   <div class="ranks">
