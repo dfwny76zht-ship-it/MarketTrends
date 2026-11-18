@@ -72,3 +72,18 @@ def test_size_classes():
     assert size_class(None, "Hoya sigillatis Babyplant") == "XS"
     assert size_class(None, "Hoya carnosa compacta L") == "L"
     assert size_class(None, "Hoya imbricata") == "unknown"
+
+
+def test_places_and_collection_numbers_are_forms():
+    r = p("Hoya carnosa IPPS6260 Vietnam")
+    assert (r.epithet, r.cultivar, r.kind, r.collection_no) == ("carnosa", "Vietnam (IPPS 6260)", "form", "IPPS 6260")
+    r = p("Hoya australis IPPS0121")
+    assert (r.cultivar, r.kind) == ("IPPS 0121", "form")
+    r = p("Hoya caudata Sumatra")
+    assert (r.cultivar, r.kind) == ("Sumatra", "form")
+    r = p("Hoya sp Cianjur")
+    assert (r.epithet, r.cultivar, r.kind) == (None, "Cianjur", "form")
+    r = p("Hoya 'Lai Chau'")
+    assert r.kind == "form"
+    r = p("Hoya 'Rosita'")
+    assert r.kind == "hybrid"

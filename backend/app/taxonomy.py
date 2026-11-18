@@ -199,6 +199,18 @@ def match_pending(shop_id: int | None = None) -> int:
     return len(rows)
 
 
+def reassess_localities() -> dict:
+    """Logged cultivars / hybrids named after a place or a collection number become forms;
+    open suggestions are worked out again with the same rule."""
+    with pool.connection() as conn:
+        rows = conn.execute("SELECT id, name FROM cultivars WHERE kind IN ('cultivar', 'hybrid')").fetchall()
+        ids = [r["id"] for r in rows if names.is_locality(r["name"])]
+        if ids:
+            conn.execute("UPDATE cultivars SET kind = 'form' WHERE id = ANY(%s)", (ids,))
+        changed = [r["name"] for r in rows if r["id"] in ids]
+    return {"to_form": changed, "open_rechecked": match_pending()}
+
+
 # ---------- confirming ----------
 
 def _create_species(conn, epithet: str) -> int:

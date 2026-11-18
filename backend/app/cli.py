@@ -27,6 +27,7 @@ def main() -> None:
     reparse = sub.add_parser("reparse", help="parse an earlier run's stored pages again")
     reparse.add_argument("run_id", type=int)
     sub.add_parser("images", help="copy new offer photos now")
+    sub.add_parser("reassess-localities", help="place / collection-number names become forms")
     arc = sub.add_parser("archive", help="history from web archives")
     arc.add_argument("action", choices=["discover", "run", "reread", "reference"])
     arc.add_argument("shop_ids", type=int, nargs="+")
@@ -51,6 +52,17 @@ def main() -> None:
             else:
                 text = sys.stdin.read() if args.csv in (None, "-") else open(args.csv, encoding="utf-8").read()
                 print(archive.import_reference(args.shop_ids[0], text), "reference rows")
+        finally:
+            pool.close()
+        return
+
+    if args.cmd == "reassess-localities":
+        from . import taxonomy
+        from .db import pool
+
+        pool.open(wait=True)
+        try:
+            print(taxonomy.reassess_localities())
         finally:
             pool.close()
         return

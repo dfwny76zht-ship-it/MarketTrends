@@ -20,7 +20,33 @@ _NOISE = [
 ]
 _SIZE_SUFFIX = re.compile(r"\s+(xs|s|m|l|xl|xxl)\s*$", re.I)
 
-COLLECTION_RE = re.compile(r"\b(IML|EPC|GPS|RB|SR|UT|CMB|AH|GB|DS|JM|PG|BS|NS)[\s\-.]?(\d{2,5}[A-Za-z]?)\b", re.I)
+COLLECTION_RE = re.compile(r"\b(IPPS|IML|EPC|GPS|RB|SR|UT|CMB|AH|GB|DS|JM|PG|BS|NS)[\s\-.]?(\d{2,5}[A-Za-z]?)\b", re.I)
+
+# Places in names: a plant from a collection site or region is almost always a form (locality form)
+# of its species, not a bred cultivar.
+PLACES = {
+    "philippines", "vietnam", "thailand", "laos", "cambodia", "myanmar", "burma", "malaysia", "malaya", "indonesia",
+    "india", "china", "taiwan", "japan", "australia", "nepal", "bhutan", "singapore", "brunei", "png", "papua",
+    "guinea", "irian", "borneo", "kalimantan", "sarawak", "sabah", "sumatra", "sumatera", "java", "jawa", "bali",
+    "lombok", "sulawesi", "celebes", "moluccas", "molukken", "mulukken", "maluku", "halmahera", "seram", "ambon",
+    "haruku", "timor", "flores", "sumbawa", "palawan", "luzon", "mindanao", "mindoro", "negros", "panay", "samar",
+    "leyte", "cebu", "bohol", "vanuatu", "fiji", "samoa", "solomon", "hainan", "yunnan", "guangxi", "okinawa",
+    "queensland", "assam", "sikkim", "kerala", "andaman", "nicobar", "cianjur", "bogor", "sukabumi", "bandung",
+    "loei", "krabi", "phuket", "trang", "ranong", "kanchanaburi", "chiang", "sapa", "dalat", "aceh", "kinabalu",
+    "padang", "sidempuan", "nganjuk", "lai chau", "new guinea", "irian jaya", "irian yaya", "sri lanka",
+}
+
+
+def is_locality(name: str | None) -> bool:
+    """A collection number or a place in the name."""
+    if not name:
+        return False
+    if COLLECTION_RE.search(name):
+        return True
+    low = re.sub(r"[^a-z ]+", " ", name.lower())
+    words = set(low.split())
+    padded = f" {' '.join(low.split())} "
+    return bool(words & PLACES) or any(f" {p} " in padded for p in PLACES if " " in p)
 
 _QUALIFIERS = {
     "cv.": "cv", "cv": "cv", "var.": "var", "var": "var", "ssp.": "subsp", "ssp": "subsp",
@@ -120,6 +146,13 @@ def parse(name: str, epithets: set[str], synonyms: dict[str, str]) -> Parsed:
         else:
             p.cultivar = _title(rest)
             p.kind = "cultivar" if p.epithet else "hybrid"
+    if p.kind != "subspecies":
+        if p.collection_no and not p.cultivar:
+            p.cultivar, p.kind = p.collection_no, "form"
+        elif p.cultivar and (p.collection_no or is_locality(p.cultivar)):
+            if p.collection_no:
+                p.cultivar = f"{p.cultivar} ({p.collection_no})"
+            p.kind = "form"
     return p
 
 
