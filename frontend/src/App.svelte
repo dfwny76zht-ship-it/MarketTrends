@@ -13,6 +13,7 @@
   import Groupings from './pages/Groupings.svelte';
   import GroupingEditor from './pages/GroupingEditor.svelte';
   import ChartWindow from './components/ChartWindow.svelte';
+  import GroupingPopup from './components/GroupingPopup.svelte';
   import { chartWin } from './lib/state.svelte.js';
 
   let user = $state(null);
@@ -124,6 +125,7 @@
       {/if}
     </main>
     <ChartWindow />
+    <GroupingPopup />
   {/if}
 {/if}
 

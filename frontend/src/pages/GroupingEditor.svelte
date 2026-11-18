@@ -5,8 +5,26 @@
   import FilterBar from '../components/FilterBar.svelte';
   import Chart from '../components/Chart.svelte';
 
-  /** id: grouping id, or 'new'. */
-  let { id } = $props();
+  /** id: grouping id, or 'new'. In the popup, onclose closes it and onopen switches to another grouping. */
+  let { id, onclose = null, onopen = null } = $props();
+
+  // Unsaved work survives closing the popup (and reloading): one draft per grouping in this browser.
+  const draftKey = `mt-grouping-draft-${id}`;
+  function readDraft() {
+    try {
+      return JSON.parse(localStorage.getItem(draftKey));
+    } catch {
+      return null;
+    }
+  }
+  function writeDraft(v) {
+    try {
+      if (v) localStorage.setItem(draftKey, JSON.stringify(v));
+      else localStorage.removeItem(draftKey);
+    } catch {
+      /* storage unavailable: the draft just isn't kept */
+    }
+  }
 
   const TYPE_LABEL = { species: 'Species', form: 'Form', cultivar: 'Cultivar', hybrid: 'Hybrid' };
 
@@ -14,13 +32,18 @@
   let busy = $state(false);
 
   function back() {
-    if (history.length > 1) history.back();
+    if (onclose) onclose();
+    else if (history.length > 1) history.back();
     else location.hash = '#/overview';
   }
 
   // ---------- new grouping ----------
-  let newName = $state('');
-  let start = $state('type');
+  const newDraft = id === 'new' ? readDraft() : null;
+  let newName = $state(newDraft?.name ?? '');
+  let start = $state(newDraft?.start ?? 'species');
+  $effect(() => {
+    if (id === 'new') writeDraft(newName || start !== 'species' ? { name: newName, start } : null);
+  });
 
   async function create(e) {
     e.preventDefault();
@@ -30,7 +53,9 @@
       const r = await api('/groupings', { method: 'POST', body: { name: newName, start } });
       setGroupings(r.groupings);
       chartPanel.by = String(r.id);
-      location.replace(`#/groupings/${r.id}`);
+      writeDraft(null);
+      if (onopen) onopen(r.id);
+      else location.replace(`#/groupings/${r.id}`);
     } catch (err) {
       error = err.message;
     } finally {
@@ -57,10 +82,24 @@
 
   $effect(() => {
     if (!grouping || initialised) return;
-    name = grouping.name;
-    groups = grouping.groups.map((g) => ({ key: `g${g.id}`, id: g.id, name: g.name }));
     serverOwn = Object.fromEntries(grouping.groups.flatMap((g) => g.members.map((m) => [m.key, `g${g.id}`])));
+    const d = readDraft();
+    if (d) {
+      ({ name, groups, changes } = d);
+      selectedGroup = d.selectedGroup ?? null;
+      q = d.q ?? '';
+      tmp = d.tmp ?? 0;
+    } else {
+      name = grouping.name;
+      groups = grouping.groups.map((g) => ({ key: `g${g.id}`, id: g.id, name: g.name }));
+    }
     initialised = true;
+  });
+
+  $effect(() => {
+    if (!initialised || id === 'new') return;
+    const snapshot = { name, groups: $state.snapshot(groups), changes: $state.snapshot(changes), selectedGroup, q, tmp };
+    writeDraft(dirty ? snapshot : null);
   });
 
   async function loadPlants(params) {
@@ -215,6 +254,8 @@
         });
       }
       setGroupings(list);
+      writeDraft(null);
+      initialised = false;
       back();
     } catch (e) {
       error = e.message;
@@ -225,6 +266,8 @@
 
   function cancel() {
     if (dirty && !confirm('Discard your changes?')) return;
+    writeDraft(null);
+    changes = {};
     back();
   }
 
@@ -232,6 +275,7 @@
     if (!confirm(`Delete the grouping "${grouping.name}"?`)) return;
     try {
       setGroupings(await api(`/groupings/${grouping.id}`, { method: 'DELETE' }));
+      writeDraft(null);
       back();
     } catch (e) {
       error = e.message;
@@ -249,6 +293,7 @@
     <label>Name <input bind:value={newName} placeholder="e.g. Look-alikes" /></label>
     <fieldset>
       <legend>Start from</legend>
+      <label class="opt"><input type="radio" bind:group={start} value="species" /> One group per species</label>
       <label class="opt"><input type="radio" bind:group={start} value="type" /> Species / Forms / Cultivars / Hybrids</label>
       <label class="opt"><input type="radio" bind:group={start} value="empty" /> Empty</label>
       {#each manual as g (g.id)}
@@ -272,6 +317,7 @@
 {:else}
   <div class="topbar">
     <input class="title" bind:value={name} aria-label="Grouping name" />
+    {#if dirty}<span class="unsaved">Unsaved changes</span>{/if}
     <span class="grow"></span>
     <button class="link danger" onclick={removeGrouping}>Delete grouping</button>
     <button onclick={cancel} disabled={busy}>Cancel</button>
@@ -361,6 +407,7 @@
   .topbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
   .title { font-size: 18px; font-weight: 600; max-width: 360px; }
   .grow { flex: 1; }
+  .unsaved { font-size: 13px; color: var(--warn); }
   .newform { max-width: 520px; display: flex; flex-direction: column; gap: 12px; }
   .newform label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
   fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
@@ -372,7 +419,7 @@
   .danger { color: var(--bad); }
   .layout { display: grid; grid-template-columns: minmax(280px, 1fr) 300px; gap: 16px; align-items: start; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
-  .groups { display: flex; flex-direction: column; gap: 4px; }
+  .groups { display: flex; flex-direction: column; gap: 4px; max-height: 55vh; overflow-y: auto; }
   .grow-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: var(--radius);
     border: 1px solid transparent; background: none; text-align: left; width: 100%; }
   .grow-row.on { border-color: var(--accent); background: var(--surface-2); }

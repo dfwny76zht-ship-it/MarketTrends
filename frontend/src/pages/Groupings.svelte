@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { meta, loadMeta, setGroupings } from '../lib/state.svelte.js';
+  import { meta, loadMeta, setGroupings, openGrouping } from '../lib/state.svelte.js';
   import { slotColor } from '../lib/viz.js';
 
   loadMeta(true);
@@ -22,21 +22,21 @@
   <a class="back" href="#/overview">← Overview</a>
   <h1>Groupings</h1>
   <span class="grow"></span>
-  <a class="btn primary" href="#/groupings/new">＋ New grouping</a>
+  <button class="btn primary" onclick={() => openGrouping('new')}>＋ New grouping</button>
 </div>
 {#if error}<p class="error">{error}</p>{/if}
 
 <div class="card">
   {#each mine as g (g.id)}
     <div class="row">
-      <a class="name" href="#/groupings/{g.id}">{g.name}</a>
+      <button class="name" onclick={() => openGrouping(g.id)}>{g.name}</button>
       <span class="tags">
         {#each g.groups as x, i (x.id)}
           <span class="tag"><span class="dot" style="background: {slotColor(i)}"></span>{x.label}
             <span class="muted">{x.members.length}</span></span>
         {/each}
       </span>
-      <a class="btn" href="#/groupings/{g.id}">Edit</a>
+      <button class="btn" onclick={() => openGrouping(g.id)}>Edit</button>
       <button class="link danger" onclick={() => remove(g)}>Delete</button>
     </div>
   {:else}
@@ -54,7 +54,7 @@
   .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
   .row { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .row:last-child { border-bottom: none; }
-  .name { font-weight: 600; color: var(--text); text-decoration: none; min-width: 160px; }
+  .name { font-weight: 600; color: var(--text); border: none; background: none; padding: 0; text-align: left; min-width: 160px; }
   .tags { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; }
   .tag { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); }
   .dot { width: 10px; height: 10px; border-radius: 3px; }

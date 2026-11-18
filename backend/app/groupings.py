@@ -47,7 +47,7 @@ def list_groupings():
 
 class GroupingIn(BaseModel):
     name: str
-    start: str = "empty"  # empty | type | copy:<grouping id>
+    start: str = "empty"  # empty | species | type | copy:<grouping id>
 
 
 def _seed_from_type(conn, gid: int) -> None:
@@ -70,6 +70,34 @@ def _seed_from_type(conn, gid: int) -> None:
         " FROM assignments a JOIN cultivars c ON c.id = a.cultivar_id WHERE a.confirmed AND NOT a.ignored",
         (gid, ids["form"], ids["hybrid"], ids["cultivar"]),
     )
+
+
+def _seed_from_species(conn, gid: int) -> None:
+    """One group per species with confirmed offers (its forms and cultivars come along via the species),
+    plus one group for hybrids without a species."""
+    rows = conn.execute(
+        "SELECT DISTINCT s.id, s.epithet FROM assignments a JOIN species s ON s.id = a.species_id"
+        " WHERE a.confirmed AND NOT a.ignored ORDER BY s.epithet"
+    ).fetchall()
+    for pos, r in enumerate(rows):
+        g = conn.execute(
+            "INSERT INTO grouping_groups (grouping_id, name, position) VALUES (%s, %s, %s) RETURNING id",
+            (gid, f"Hoya {r['epithet']}", pos),
+        ).fetchone()["id"]
+        conn.execute("INSERT INTO grouping_members (grouping_id, group_id, species_id) VALUES (%s, %s, %s)",
+                     (gid, g, r["id"]))
+    hybrids = conn.execute(
+        "SELECT DISTINCT c.id FROM assignments a JOIN cultivars c ON c.id = a.cultivar_id"
+        " WHERE a.confirmed AND NOT a.ignored AND c.species_id IS NULL"
+    ).fetchall()
+    if hybrids:
+        g = conn.execute(
+            "INSERT INTO grouping_groups (grouping_id, name, position) VALUES (%s, 'Hybrids', %s) RETURNING id",
+            (gid, len(rows)),
+        ).fetchone()["id"]
+        for h in hybrids:
+            conn.execute("INSERT INTO grouping_members (grouping_id, group_id, cultivar_id) VALUES (%s, %s, %s)",
+                         (gid, g, h["id"]))
 
 
 def _seed_from_copy(conn, gid: int, source: int) -> None:
@@ -108,7 +136,9 @@ def create(body: GroupingIn):
                 ).fetchone()["id"]
             except errors.UniqueViolation:
                 raise HTTPException(409, f"A grouping called {name} already exists.")
-            if body.start == "type":
+            if body.start == "species":
+                _seed_from_species(conn, gid)
+            elif body.start == "type":
                 _seed_from_type(conn, gid)
             elif body.start.startswith("copy:"):
                 try:

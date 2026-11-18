@@ -75,6 +75,12 @@ export function setGroupings(list) {
   filters.groups = filters.groups.filter((id) => known.has(id));
 }
 
+/** Grouping editor popup: id is a grouping id or 'new'. */
+export const groupingPopup = $state({ id: null });
+export function openGrouping(id) {
+  groupingPopup.id = String(id);
+}
+
 export const chartWin = $state(
   load('mt-chartwin', { open: false, max: false, height: 340, metric: 'price', keys: [], names: {} }),
 );

@@ -197,3 +197,11 @@ def test_grouping_rework(data):
         len(g["members"]) for g in next(x for x in groupings.list_groupings() if x["id"] == look["id"])["groups"])
     groupings.delete(c["id"])
     groupings.delete(look["id"])
+
+    # One group per species: the cultivar follows its species (carnosa).
+    sp = groupings.create(groupings.GroupingIn(name="Per species", start="species"))
+    rows = {p["key"]: p for p in groupings.plants(sp["id"], days=28, shops=[data["shop"]])}
+    assert rows[data["rosita"]]["own"] is None and rows[data["rosita"]]["species_group"] is not None
+    names = {g["name"] for g in next(x for x in sp["groupings"] if x["id"] == sp["id"])["groups"]}
+    assert {"Hoya carnosa", "Hoya pubicalyx"} <= names
+    groupings.delete(sp["id"])

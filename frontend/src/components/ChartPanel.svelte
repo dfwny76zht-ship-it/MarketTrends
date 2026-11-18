@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { filters, filterParams, chartPanel, meta, loadMeta } from '../lib/state.svelte.js';
+  import { filters, filterParams, chartPanel, meta, loadMeta, openGrouping } from '../lib/state.svelte.js';
   import { baseOption, lineSeries, cssVar, slotColor, fmtEur, fmtInt, qs } from '../lib/viz.js';
   import Chart from './Chart.svelte';
   import PriceRanges from './PriceRanges.svelte';
@@ -190,7 +190,7 @@
   function pickBy(e) {
     if (e.target.value === '__new') {
       e.target.value = chartPanel.by;
-      location.hash = '#/groupings/new';
+      openGrouping('new');
     } else chartPanel.by = e.target.value;
   }
 
@@ -253,7 +253,7 @@
       {#if grouping?.kind === 'price'}
         <button class="link" class:on={editRanges} onclick={() => (editRanges = !editRanges)}>Price ranges</button>
       {:else if grouping?.kind === 'manual'}
-        <a class="link" href="#/groupings/{grouping.id}">Edit {grouping.name}</a>
+        <button class="link" onclick={() => openGrouping(grouping.id)}>Edit {grouping.name}</button>
       {/if}
     </div>
   </div>
