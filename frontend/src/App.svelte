@@ -9,6 +9,7 @@
   import Events from './pages/Events.svelte';
   import Watchlist from './pages/Watchlist.svelte';
   import Scatter from './pages/Scatter.svelte';
+  import Trends from './pages/Trends.svelte';
   import ChartWindow from './components/ChartWindow.svelte';
   import { chartWin } from './lib/state.svelte.js';
 
@@ -25,7 +26,7 @@
 
   function pageFromHash() {
     const p = location.hash.replace(/^#\/?/, '').split('/')[0];
-    return ['overview', 'taxon', 'events', 'scatter', 'watchlist', 'shops', 'assign', 'species'].includes(p) ? p : 'overview';
+    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'shops', 'assign', 'species'].includes(p) ? p : 'overview';
   }
 
   api('/me', { allow401: true })
@@ -74,6 +75,7 @@
       <strong>Market Trends</strong>
       <nav>
         <a href="#/overview" class:active={page === 'overview' || page === 'taxon'}>Overview</a>
+        <a href="#/trends" class:active={page === 'trends'}>Trends</a>
         <a href="#/events" class:active={page === 'events'}>Events</a>
         <a href="#/scatter" class:active={page === 'scatter'}>Price vs. stock</a>
         <a href="#/watchlist" class:active={page === 'watchlist'}>Watchlist</a>
@@ -91,6 +93,8 @@
         <Overview />
       {:else if page === 'taxon' && taxonKey}
         {#key taxonKey}<Taxon key={taxonKey} />{/key}
+      {:else if page === 'trends'}
+        <Trends />
       {:else if page === 'events'}
         <Events />
       {:else if page === 'scatter'}

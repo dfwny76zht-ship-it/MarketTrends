@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import analytics, auth, collect, config, migrate, shops, taxa, taxonomy
+from . import analytics, auth, collect, config, migrate, shops, taxa, taxonomy, trends
 from .db import pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -20,6 +20,16 @@ scheduler.add_job(
     id="nightly",
     coalesce=True,
     misfire_grace_time=3600,
+)
+scheduler.add_job(
+    trends.weekly_summary,
+    "cron",
+    day_of_week="mon",
+    hour=8,
+    minute=0,
+    id="weekly_summary",
+    coalesce=True,
+    misfire_grace_time=6 * 3600,
 )
 
 
@@ -46,6 +56,7 @@ app.include_router(auth.router)
 app.include_router(shops.router)
 app.include_router(taxa.router)
 app.include_router(analytics.router)
+app.include_router(trends.router)
 
 
 @app.get("/api/health")
