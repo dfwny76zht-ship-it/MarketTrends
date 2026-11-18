@@ -12,5 +12,5 @@ if [ "${REFRESH:-0}" = "1" ] || [ ! -f "$out/data.json" ]; then
     rm -f "$tmp"
 fi
 cp investor/markus/site/index.html investor/markus/site/app.js investor/markus/site/style.css investor/markus/site/echarts.min.js "$out/"
-chmod -R a+rX "$out"
+chmod a+r "$out"/index.html "$out"/app.js "$out"/style.css "$out"/echarts.min.js "$out"/data.json
 echo "published $(git log --oneline -1)"
