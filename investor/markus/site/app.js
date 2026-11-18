@@ -175,15 +175,18 @@
         const variants = [...new Set(os.map((o) => o.plant))];
         return { key, name: speciesName(key, os), value: os.length, grp: grp === 'other' ? 'other' : Number(grp), variants };
       });
+      // Only the namesake species (carnosa, kerrii, wayettii) carry the group colour; everything else is grey.
+      const NAMESAKE = /carnosa|kerrii|wayet/i;
+      for (const sl of slices) sl.colorGrp = sl.grp !== 'other' && NAMESAKE.test(sl.name) ? sl.grp : 'other';
       const order = (g) => tops.indexOf(g);
-      slices.sort((a, b) => order(a.grp) - order(b.grp) || b.value - a.value || a.name.localeCompare(b.name));
+      slices.sort((a, b) => order(a.colorGrp) - order(b.colorGrp) || b.value - a.value || a.name.localeCompare(b.name));
       const seen = {};
       const data = slices.map((sl) => {
-        const i = (seen[sl.grp] = (seen[sl.grp] ?? -1) + 1);
-        const base = groups[sl.grp].color;
+        const i = (seen[sl.colorGrp] = (seen[sl.colorGrp] ?? -1) + 1);
+        const base = groups[sl.colorGrp].color;
         const color = i % 3 === 0 ? base : i % 3 === 1 ? shade(base, 0.18) : tint(base, 0.25);
         const dim = selected && selected !== sl.grp && groups[selected]?.parent !== sl.grp;
-        return { name: sl.name, value: sl.value, gid: sl.grp, variants: sl.variants, itemStyle: { color, opacity: dim ? 0.35 : 1 } };
+        return { name: sl.name, value: sl.value, gid: sl.grp, nocard: sl.colorGrp === 'other', variants: sl.variants, itemStyle: { color, opacity: dim ? 0.35 : 1 } };
       });
       chart.setOption({
         animation: false,
@@ -221,7 +224,7 @@
     chart.on('mouseover', (p) => {
       cancelAnimationFrame(off);
       document.querySelectorAll('.card.hl').forEach((c) => c.classList.remove('hl'));
-      if (p.data?.gid != null) cardFor(p.data.gid)?.classList.add('hl');
+      if (p.data?.gid != null && !p.data.nocard) cardFor(p.data.gid)?.classList.add('hl');
       if (p.data?.rest != null) {
         chart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: p.data.rest });
         chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: p.data.rest });

@@ -49,31 +49,48 @@ Each signal gets a 0–1 score per pair, plus a combined strength: weak / medium
 
 ---
 
-## Step 8: Historical data from web archives
+## Step 8: Historical data from web archives (FIRST, decided 2026-11-18)
 
-The tool reads **only the archives**, never the shops. Archived data is marked everywhere: dashed lines and "archive" labels.
+Victor's decisions:
+- FlorAccess first, then Kakteen-Haage.
+- From 2018 on.
+- Every data point linked to species/cultivar IDs in Market Trends, through the normal Assign flow.
+- No retroactive events.
+- Source shown explicitly on every point.
+- His CSV `floraccess_preisverlauf_2018-2026.csv` (65 archive rows) is the reference: the tool checks itself against it, and where they differ we find out which one is wrong.
+- Priorities: (1) same-product price over time, (2) species variety over time, (3) growers / supply.
+- A large development chart on the Trends page, built like the Overview chart panel.
+- Analyse what is there first; write layout readers only where data exists.
 
-### Sources
-- **Wayback Machine** (archive.org): its CDX list shows which copies of a page exist and when.
-- **Common Crawl**: monthly crawl indexes. Single pages are read from their crawl files with byte ranges. Kakteen-Haage blocks Common Crawl's crawler, so that source has nothing for Haage.
-- **Politeness:**
-  - at least 5 s between requests to archive.org, slower if it asks
-  - the tool's generic name as the client identity, never your e-mail
+### Coverage check (done 2026-11-18, Wayback CDX, Hoya URLs from 2018)
+- **Category pages:** only 6 copies before 2026 (2019-08, 2019-10, 2019-12 ×2, 2020-09), then 24 copies in 2026-02, all language versions of the same day. **Too sparse on their own.**
+- **Grower offer pages (`/v/<id>/<grower>/<plant>/`), 2019–2023:**
+  - 2019: 45 offers from 7 growers
+  - 2020: 34 offers from 11 growers
+  - 2021: 54 offers from 11 growers
+  - 2022: 21 offers from 7 growers
+  - 2023: 8 offers from 7 growers
+  
+  The grower is in the address itself (van der Arend, Gasa DK, van der Velden, Elstgeest, Feldborg, De Meyst, Duijn Hove, Ruba Baers, Giromagi, JM Plants, …).
+- **Product pages (`/product/<id>/`), 2023–2026:** 62 distinct, mostly 2024-07, 2025-08 and 2026-02.
+- **In total** about 280 usable copies, spread over 2019-07 … 2026-02 with gaps; every year has some.
+- **Common Crawl:** the index server was unreliable during the check (timeouts). It does hold some FlorAccess pages, e.g. 2021-04; the tool will retry properly.
+- **Conclusion:** the history is mainly in the product pages, not the category pages. Proposal: read both, with the source per point ("Archive · product page 2021-04" / "Archive · category page 2019-08").
 
-### How a history run works (started by hand, per shop)
-1. **Check what exists.** Only the archive lists are read; this is cheap and fast. The shop page then shows a coverage table: per month, how many copies of the category pages and product pages exist, from which archive, and from when to when.
-2. **You choose:** time range, category pages only or product pages too, and monthly or weekly copies.
-3. **Loading.** One copy per chosen interval is fetched, about 40–80 minutes per shop. Raw pages are stored like live pages.
-4. **Reading.** The existing shop readers are tried on the old pages. Old layouts that don't fit get their own small archive readers, tested against the stored copies. Pages that can't be read are listed as "skipped (old layout)", never guessed.
-5. **Storing:**
-   - observations get `source = archive`
-   - old offers are matched to current ones by item key, otherwise by name
-   - **No events are made from archive data,** because the gaps between copies are too big. The charts show the points, and "first seen" dates go back as far as the archive.
-6. **Prices:**
-   - net prices use the VAT rate valid at the time, e.g. Germany's 16 % / 5 % from July to December 2020
-   - ECB exchange rates for the archive date
+### Build order
+1. **Archive client** with polite fetching (archive.org ~5 s between requests) and raw pages stored as snapshots with `source=archive` and the archive URL. A dry-run "coverage" view per shop.
+2. **Readers for FlorAccess** in two layout eras:
+   - `/v/` grower offer pages and 2019–2020 category pages
+   - `/product/` pages and 2026 category pages
+   
+   Each is tested against stored copies. Unreadable pages are listed, never guessed.
+3. **Import into observations** (`source=archive`, plus a grower field), matched to live listings by offer id, otherwise as new archive listings. Names go through the normal Assign flow, linked to species/cultivar IDs.
+4. **Reference check against the CSV,** as a report of matches and differences per row.
+5. **Trends page: development chart** (like the Overview panel), with archive points dashed and source on hover:
+   - same product (name + pot + height) price over time
+   - species / offers per year
+   - growers per year
+   - group-wise (carnosa-like …) median price per year
+   - CSV export
+6. Afterwards Kakteen-Haage.
 
-### Open questions
-1. Kakteen-Haage: use archive copies, even though the live shop blocks us? This doesn't touch Haage's servers.
-2. Depth: category pages only (prices, availability; fast), or product pages too (stock at FlorAccess; about 10× more requests)?
-3. How far back: everything available, or from a set year (e.g. 2019, before the Hoya boom)?
