@@ -31,9 +31,13 @@ def _all(conn) -> list[dict]:
     by_group: dict[int, list] = {}
     for m in members:
         by_group.setdefault(m["group_id"], []).append({"key": m["key"], "name": m["name"]})
+    offers: dict[int, list] = {}
+    for r in conn.execute("SELECT group_id, listing_id FROM grouping_offer_members ORDER BY listing_id"):
+        offers.setdefault(r["group_id"], []).append(r["listing_id"])
     for g in out:
-        for gg in g["groups"]:
+        for gg in g["groups"] + g["subgroups"]:
             gg["members"] = by_group.get(gg["id"], [])
+            gg["offers"] = offers.get(gg["id"], [])
             for k in ("price_from", "price_to"):
                 gg[k] = float(gg[k]) if gg[k] is not None else None
     return out
@@ -236,6 +240,102 @@ def set_groups(grouping_id: int, body: GroupsIn):
         if gone:
             conn.execute("DELETE FROM grouping_groups WHERE id = ANY(%s)", (gone,))
         return _all(conn)
+
+
+class StructItem(BaseModel):
+    id: int | None = None
+    name: str
+    parent: int | None = None  # index of the parent group in the same list (subgroups only)
+
+
+class StructIn(BaseModel):
+    groups: list[StructItem]
+
+
+@router.put("/{grouping_id}/structure")
+def set_structure(grouping_id: int, body: StructIn):
+    """Manual groupings: groups and their subgroups in one list. Returns the saved ids in the order sent."""
+    with pool.connection() as conn:
+        with conn.transaction():
+            g = conn.execute("SELECT kind FROM groupings WHERE id = %s", (grouping_id,)).fetchone()
+            if not g or g["kind"] != "manual":
+                raise HTTPException(422, "Only your own groupings have subgroups.")
+            items = body.groups
+            for i, it in enumerate(items):
+                if not it.name.strip():
+                    raise HTTPException(422, "Every group needs a name.")
+                if it.parent is not None and not (0 <= it.parent < i and items[it.parent].parent is None):
+                    raise HTTPException(422, "A subgroup must sit under a group listed before it.")
+            existing = {r["id"]: r["parent_id"] for r in conn.execute(
+                "SELECT id, parent_id FROM grouping_groups WHERE grouping_id = %s", (grouping_id,))}
+            ids: list[int] = []
+            for pos, it in enumerate(items):
+                parent_id = ids[it.parent] if it.parent is not None else None
+                if it.id in existing:
+                    conn.execute("UPDATE grouping_groups SET name = %s, position = %s, parent_id = %s WHERE id = %s",
+                                 (it.name.strip(), pos, parent_id, it.id))
+                    ids.append(it.id)
+                else:
+                    ids.append(conn.execute(
+                        "INSERT INTO grouping_groups (grouping_id, name, position, parent_id) VALUES (%s, %s, %s, %s)"
+                        " RETURNING id", (grouping_id, it.name.strip(), pos, parent_id)).fetchone()["id"])
+            gone = [i for i in existing if i not in set(ids)]
+            if gone:
+                conn.execute("DELETE FROM grouping_groups WHERE id = ANY(%s)", (gone,))
+            # Plants belong to top-level groups only.
+            conn.execute(
+                "DELETE FROM grouping_members m USING grouping_groups g WHERE g.id = m.group_id AND g.parent_id IS NOT NULL"
+                " AND m.grouping_id = %s", (grouping_id,))
+        return {"ids": ids, "groupings": _all(conn)}
+
+
+class OffersIn(BaseModel):
+    listing_ids: list[int]
+    group_id: int | None = None  # a subgroup; None takes the offers out of any subgroup of this grouping
+
+
+@router.post("/{grouping_id}/offers/bulk")
+def set_offers(grouping_id: int, body: OffersIn):
+    with pool.connection() as conn:
+        with conn.transaction():
+            g = conn.execute("SELECT kind FROM groupings WHERE id = %s", (grouping_id,)).fetchone()
+            if not g or g["kind"] != "manual":
+                raise HTTPException(422, "Only your own groupings have subgroups.")
+            if body.group_id is not None and not conn.execute(
+                "SELECT 1 FROM grouping_groups WHERE id = %s AND grouping_id = %s AND parent_id IS NOT NULL",
+                (body.group_id, grouping_id),
+            ).fetchone():
+                raise HTTPException(404, "Subgroup not found.")
+            conn.execute("DELETE FROM grouping_offer_members WHERE grouping_id = %s AND listing_id = ANY(%s)",
+                         (grouping_id, body.listing_ids))
+            if body.group_id is not None:
+                conn.execute(
+                    "INSERT INTO grouping_offer_members (grouping_id, group_id, listing_id)"
+                    " SELECT %s, %s, unnest(%s::bigint[])", (grouping_id, body.group_id, body.listing_ids))
+        return _all(conn)
+
+
+@router.get("/offers")
+def offers(days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
+           scope: str = "period", types: list[str] | None = Query(None)):
+    """Every offer under the filters (its latest observation), for putting offers into subgroups."""
+    fl = flt.make(days, shops, size, scope, types, None)
+    with pool.connection() as conn:
+        all_time = fl.scope != "period"
+        f, p = flt.where(conn, fl, "obs", period=not all_time)
+        window = "" if all_time or fl.days <= 0 else " WHERE observed_at >= now() - make_interval(days => %s)"
+        f += f" AND o.id IN (SELECT DISTINCT ON (listing_id) id FROM observations{window} ORDER BY listing_id, observed_at DESC)"
+        if window:
+            p = p + [fl.days]
+        rows = conn.execute(
+            f"SELECT l.id, l.name, l.url, sh.name AS shop, {_key('cultivar')} AS plant_key, {TAXON_NAME} AS plant,"
+            " CASE WHEN a.species_id IS NOT NULL THEN 's' || a.species_id END AS species_key,"
+            " o.price_eur_net AS price, o.quantity AS stock, o.availability, o.size_class, o.pot_size,"
+            " EXISTS (SELECT 1 FROM images i WHERE i.listing_id = l.id AND i.status = 'ok') AS photo"
+            f" {BASE} {f} ORDER BY 6, 4, 2",
+            p,
+        ).fetchall()
+    return [dict(r, price=float(r["price"]) if r["price"] is not None else None) for r in rows]
 
 
 class BulkIn(BaseModel):

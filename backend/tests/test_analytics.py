@@ -213,3 +213,39 @@ def test_grouping_rework(data):
     assert data["rosita"] in plan["Cultivars"] and len(groupings.list_groupings()) == before
     assert groupings.seed(start="empty") == []
     assert {p["key"] for p in groupings.all_plants(days=28, shops=[data["shop"]])} >= {data["rosita"], data["kerrii"]}
+
+
+def test_subgroups(data, db):
+    from app import analytics, groupings
+
+    r = groupings.create(groupings.GroupingIn(name="Subs", start="empty"))
+    gid = r["id"]
+    S = groupings.StructItem
+    st = groupings.set_structure(gid, groupings.StructIn(groups=[S(name="Carnosa-like"), S(name="Single leaf", parent=0)]))
+    parent, single = st["ids"]
+    g = next(x for x in st["groupings"] if x["id"] == gid)
+    assert [x["name"] for x in g["groups"]] == ["Carnosa-like"] and g["subgroups"][0]["parent_id"] == parent
+
+    groupings.set_members(gid, groupings.BulkIn(keys=[data["rosita"]], group_id=parent))
+    offers = [o for o in groupings.offers(days=28, shops=[data["shop"]]) if o["plant_key"] == data["rosita"]]
+    assert len(offers) == 1 and offers[0]["stock"] == 200
+    groupings.set_offers(gid, groupings.OffersIn(listing_ids=[offers[0]["id"]], group_id=single))
+
+    # Filter by the subgroup: only that offer; tiles/table see its stock.
+    rows = analytics.taxa(days=28, level="cultivar", shops=[data["shop"]], group=[single])
+    assert [r["key"] for r in rows] == [data["rosita"]] and rows[0]["quantity"] == 200
+    # Split in the chart: the subgroup gets its own slice.
+    b = analytics.breakdown(by=str(gid), measure="stock", shops=[data["shop"]], sub=True)
+    vals = {r["group"]: r["value"] for r in b["rows"]}
+    assert vals[str(single)] == 200 and "Carnosa-like › Single leaf" in {x["name"] for x in b["groups"]}
+    # Not split: counted in the parent.
+    b = analytics.breakdown(by=str(gid), measure="stock", shops=[data["shop"]])
+    assert {r["group"]: r["value"] for r in b["rows"]}[str(parent)] == 200
+
+    # Plant leaves the parent group: the offer no longer counts in the subgroup.
+    groupings.set_members(gid, groupings.BulkIn(keys=[data["rosita"]], group_id=None))
+    assert analytics.taxa(days=28, level="cultivar", shops=[data["shop"]], group=[single]) == []
+    # Deleting the parent removes the subgroup.
+    after = groupings.set_structure(gid, groupings.StructIn(groups=[]))
+    assert next(x for x in after["groupings"] if x["id"] == gid)["subgroups"] == []
+    groupings.delete(gid)

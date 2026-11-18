@@ -329,7 +329,7 @@ MEASURES = {
 def breakdown(by: str = "top", measure: str = "offers", mode: str = "snapshot", split: bool = False,
               level: str = "species", days: int = 28, shops: list[int] | None = Query(None), size: str | None = None,
               scope: str = "period", types: list[str] | None = Query(None), group: list[int] | None = Query(None),
-              top: int = 5):
+              top: int = 5, sub: bool = False):
     """by: 'top' (top species), 'shop', or a grouping id. mode: 'snapshot' (each offer's latest observation)
     or 'series' (per day). split: one panel per shop."""
     if measure not in MEASURES:
@@ -348,6 +348,7 @@ def breakdown(by: str = "top", measure: str = "offers", mode: str = "snapshot", 
             if window:
                 p = p + [fl.days]
         grouping = None
+        split_subs = False
         if by == "top":
             g_sql, n_sql = _key(level), _name(level)
         elif by == "shop":
@@ -360,7 +361,8 @@ def breakdown(by: str = "top", measure: str = "offers", mode: str = "snapshot", 
             grouping = flt.load_groupings(conn, [gid]).get(gid)
             if not grouping:
                 raise HTTPException(404, "Grouping not found.")
-            g_sql, n_sql = f"{flt.group_expr(grouping, 'o.price_eur_net')}::text", "NULL::text"
+            split_subs = sub is True and bool(grouping.get("subgroups"))
+            g_sql, n_sql = f"{flt.group_expr(grouping, 'o.price_eur_net', split_subs)}::text", "NULL::text"
         cols = ["l.shop_id AS panel" if split else "NULL::integer AS panel",
                 f"{DAY} AS day" if mode == "series" else "NULL::date AS day"]
         rows = conn.execute(
@@ -381,7 +383,11 @@ def breakdown(by: str = "top", measure: str = "offers", mode: str = "snapshot", 
             totals[r["g"]] += float(r["v"] or 0)
             names[r["g"]] = r["name"]
     if grouping:
-        groups = [{"id": str(g["id"]), "name": g["label"]} for g in grouping["groups"]]
+        groups = []
+        for g in grouping["groups"]:
+            subs = [x for x in grouping.get("subgroups", []) if x["parent_id"] == g["id"]] if split_subs else []
+            groups.append({"id": str(g["id"]), "name": f"{g['label']} (rest)" if subs else g["label"]})
+            groups += [{"id": str(x["id"]), "name": f"{g['label']} › {x['label']}", "parent": str(g["id"])} for x in subs]
         keep = {g["id"] for g in groups}
     elif by == "shop":
         groups = [{"id": k, "name": names[k]} for k in sorted(totals, key=int)]

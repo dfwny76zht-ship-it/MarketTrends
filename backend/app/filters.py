@@ -58,11 +58,17 @@ def load_groupings(conn, ids: list[int] | None = None) -> dict[int, dict]:
     out = {r["id"]: dict(r, groups=[]) for r in rows}
     if out:
         for gg in conn.execute(
-            "SELECT id, grouping_id, name, position, price_from, price_to, type_value FROM grouping_groups"
+            "SELECT id, grouping_id, parent_id, name, position, price_from, price_to, type_value FROM grouping_groups"
             " WHERE grouping_id = ANY(%s) ORDER BY position, id",
             [list(out)],
         ):
-            out[gg["grouping_id"]]["groups"].append(dict(gg, label=group_label(dict(gg), out[gg["grouping_id"]]["kind"])))
+            g = out[gg["grouping_id"]]
+            item = dict(gg, label=group_label(dict(gg), g["kind"]))
+            # Top-level groups in "groups"; subgroups (offer members, manual groupings only) in "subgroups".
+            g.setdefault("subgroups", [])
+            (g["subgroups"] if gg["parent_id"] else g["groups"]).append(item)
+        for g in out.values():
+            g.setdefault("subgroups", [])
     return out
 
 
@@ -86,7 +92,7 @@ def group_label(g: dict, kind: str) -> str:
     return g.get("type_value") or "Group"
 
 
-def group_expr(grouping: dict, price_sql: str) -> str:
+def group_expr(grouping: dict, price_sql: str, split_subgroups: bool = False) -> str:
     """SQL giving the group id a row falls into within one grouping, or NULL ("Other").
     Values come from the database (ids, numbers, fixed type names), so they are inlined safely."""
     kind, groups = grouping["kind"], grouping["groups"]
@@ -106,9 +112,16 @@ def group_expr(grouping: dict, price_sql: str) -> str:
         parts = [f"WHEN '{g['type_value']}' THEN {int(g['id'])}" for g in groups if g["type_value"] in TYPES]
         return f"(CASE {TYPE_SQL} {' '.join(parts)} END)" if parts else "NULL::integer"
     gid = int(grouping["id"])
-    return (
+    parent = (
         f"coalesce((SELECT m.group_id FROM grouping_members m WHERE m.grouping_id = {gid} AND m.cultivar_id = a.cultivar_id),"
         f" (SELECT m.group_id FROM grouping_members m WHERE m.grouping_id = {gid} AND m.species_id = a.species_id))"
+    )
+    if not split_subgroups or not grouping.get("subgroups"):
+        return parent
+    # An offer counts in its subgroup only while its plant is still in that subgroup's group.
+    return (
+        f"coalesce((SELECT om.group_id FROM grouping_offer_members om JOIN grouping_groups sg ON sg.id = om.group_id"
+        f" WHERE om.grouping_id = {gid} AND om.listing_id = l.id AND sg.parent_id = {parent}), {parent})"
     )
 
 
@@ -137,10 +150,22 @@ def where(conn, f: F, on: str = "obs", period: bool = True) -> tuple[str, list]:
         params.append(f.types)
     if f.groups:
         owners = conn.execute(
-            "SELECT grouping_id, array_agg(id) AS ids FROM grouping_groups WHERE id = ANY(%s) GROUP BY 1", [f.groups]
+            "SELECT id, grouping_id, parent_id FROM grouping_groups WHERE id = ANY(%s) ORDER BY id", [f.groups]
         ).fetchall()
-        groupings = load_groupings(conn, [o["grouping_id"] for o in owners])
-        for o in owners:
-            sql.append(f"{group_expr(groupings[o['grouping_id']], price)} = ANY(%s)")
-            params.append(o["ids"])
+        groupings = load_groupings(conn, sorted({o["grouping_id"] for o in owners}))
+        # Within one grouping the chosen groups are alternatives (OR); different groupings must all match (AND).
+        for gid in sorted({o["grouping_id"] for o in owners}):
+            expr = group_expr(groupings[gid], price)
+            tops = [o["id"] for o in owners if o["grouping_id"] == gid and not o["parent_id"]]
+            parts = []
+            if tops:
+                parts.append(f"{expr} = ANY(%s)")
+                params.append(tops)
+            for o in owners:
+                if o["grouping_id"] == gid and o["parent_id"]:
+                    parts.append(
+                        f"(EXISTS (SELECT 1 FROM grouping_offer_members om WHERE om.listing_id = l.id"
+                        f" AND om.group_id = {int(o['id'])}) AND {expr} = {int(o['parent_id'])})"
+                    )
+            sql.append("(" + " OR ".join(parts) + ")")
     return (" AND " + " AND ".join(sql)) if sql else "", params
