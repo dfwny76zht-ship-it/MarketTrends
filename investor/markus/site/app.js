@@ -138,9 +138,9 @@
         graphic,
         series: [
           { type: 'pie', radius: [`${r0}%`, `${r1}%`], center: ['50%', '50%'], label: { show: true, position: 'inside',
-              formatter: (p) => (p.percent >= 6 ? `${Math.round(p.percent)} %` : ''), color: '#fff', fontSize: 12, fontWeight: 600 },
+              formatter: (p) => (p.percent >= 6 ? `${Math.round(p.percent)} %` : ''), fontSize: 12, fontWeight: 600 },
             itemStyle: { borderColor: '#fff', borderWidth: 2, borderRadius: 4 }, emphasis: { scale: false },
-            data: outer.map((p) => ({ name: groups[p.id].name, value: p.v, gid: p.id,
+            data: outer.map((p) => ({ name: groups[p.id].name, value: p.v, gid: p.id, label: { color: textOn(groups[p.id].color) },
               itemStyle: { color: groups[p.id].color, opacity: !selected || selected === p.id || groups[selected]?.parent === p.id ? 1 : 0.35 } })) },
           { type: 'pie', radius: [`${r0}%`, `${r0 + 0.6 * (r1 - r0)}%`], center: ['50%', '50%'], label: { show: false },
             labelLine: { show: false }, emphasis: { scale: false }, data: inner },
@@ -202,6 +202,22 @@
     draw();
     return { chart, draw };
   }
+  // Dark label text on light slices (Kerrii yellow), white elsewhere.
+  function textOn(hex) {
+    const n = parseInt(hex.replace('#', ''), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    return 0.299 * r + 0.587 * g + 0.114 * b > 165 ? '#3a2f08' : '#fff';
+  }
+  // Hovering a Kerrii or Carnosa slice highlights its text card.
+  function linkCards(chart) {
+    const cardFor = (gid) => {
+      const top = groups[gid]?.parent ?? gid;
+      const name = groups[top]?.name ?? '';
+      return document.querySelector(`.card[data-group="${/^Kerrii/.test(name) ? 'kerrii' : /^Carnosa/.test(name) ? 'carnosa' : ''}"]`);
+    };
+    chart.on('mouseover', (p) => p.data?.gid != null && cardFor(p.data.gid)?.classList.add('hl'));
+    chart.on('mouseout', () => document.querySelectorAll('.card.hl').forEach((c) => c.classList.remove('hl')));
+  }
   function tint(hex, amount) {
     const n = parseInt(hex.replace('#', ''), 16);
     const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (255 - v) * amount));
@@ -212,6 +228,7 @@
   charts.stock = donut($('c-stock'), FA, (o) => o.stock ?? 0, 'Pflanzen');
   charts.value = donut($('c-value'), FA, value, '€');
   charts.retail = donut($('c-retail'), BJ, () => 1, 'Angebote');
+  Object.values(charts).forEach((c) => linkCards(c.chart));
 
   const kerriiId = tops.find((id) => groups[id].name === 'Kerrii-artig');
   const carnosaId = tops.find((id) => groups[id].name === 'Carnosa-artig');
