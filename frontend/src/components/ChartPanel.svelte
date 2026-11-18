@@ -116,31 +116,134 @@
     return out;
   }
 
+  /** Mix a hex colour with black: subgroups are a darker shade of their group. */
+  function shade(hex, amount) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v * (1 - amount)));
+    return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  /** Pie: groups as the outer ring (a group with subgroups shows its total); subgroups fill the inner 60 %
+      of their group's segment, with an arrow from the centre. Their names show on hover. */
   function pieOption(panel, small) {
-    return () => {
+    return (ctx = {}) => {
       const values = snap[panel.id] ?? {};
-      const parts = slices(values);
+      const all = data?.groups ?? [];
+      const subsOf = (id) => all.filter((g) => g.parent === id);
+      // Outer ring: top-level groups with their full value (rest + subgroups), folded to MAX_SLICES.
+      const totals = {};
+      for (const g of all.filter((x) => !x.parent)) {
+        totals[g.id] = (values[g.id] ?? 0) + subsOf(g.id).reduce((s, x) => s + (values[x.id] ?? 0), 0);
+      }
+      const outerParts = slices(totals).map((p) => ({ ...p, name: all.find((g) => g.id === p.id)?.label ?? p.name }));
+      const sum = outerParts.reduce((s, p) => s + p.value, 0) || 1;
+      const ink2 = cssVar('--viz-ink-2');
+      const surface = cssVar('--surface');
+      const [r0, r1] = small ? [38, 70] : [42, 72];
+      const rInner = r0 + 0.6 * (r1 - r0);
+
+      // Inner ring: same angles as the outer ring; subgroup segments coloured, everything else invisible.
+      const inner = [];
+      const arrows = [];
+      let acc = 0;
+      for (const p of outerParts) {
+        const subs = p.id === 'other' ? [] : subsOf(p.id).filter((x) => values[x.id]);
+        subs.forEach((x, i) => {
+          const v = values[x.id];
+          inner.push({ name: `${p.name} › ${x.label}`, value: v, gid: x.id, parentName: p.name, parentValue: p.value,
+            itemStyle: { color: shade(colorOf(p.id), i % 2 ? 0.5 : 0.32), borderColor: surface, borderWidth: 2 } });
+          arrows.push({ from: acc / sum, to: (acc + v) / sum, share: v / sum, index: inner.length - 1 });
+          acc += v;
+        });
+        const rest = p.value - subs.reduce((s, x) => s + values[x.id], 0);
+        if (rest > 0) {
+          inner.push({ name: '', value: rest, itemStyle: { color: 'transparent' }, tooltip: { show: false },
+            emphasis: { disabled: true }, label: { show: false } });
+          acc += rest;
+        }
+      }
+
+      // Arrows from the hole to each subgroup segment (pixel geometry: ECharts pie radii are % of half the shorter side).
+      const graphic = [];
+      if (ctx.width && ctx.height && arrows.length) {
+        const cx = ctx.width / 2;
+        const cy = ctx.height / 2;
+        const R = Math.min(ctx.width, ctx.height) / 2;
+        const at = (frac, r) => {
+          const a = ((90 - 360 * frac) * Math.PI) / 180;
+          return [cx + r * R * Math.cos(a), cy - r * R * Math.sin(a)];
+        };
+        for (const ar of arrows) {
+          const mid = (ar.from + ar.to) / 2;
+          const tail = at(mid, (r0 - 22) / 100);
+          const tip = at(mid, (r0 - 2) / 100);
+          const a = Math.atan2(tip[1] - tail[1], tip[0] - tail[0]);
+          const head = 7;
+          const left = [tip[0] - head * Math.cos(a - 0.45), tip[1] - head * Math.sin(a - 0.45)];
+          const right = [tip[0] - head * Math.cos(a + 0.45), tip[1] - head * Math.sin(a + 0.45)];
+          const show = () => ctx.chart?.dispatchAction({ type: 'showTip', seriesIndex: 1, dataIndex: ar.index });
+          const hide = () => ctx.chart?.dispatchAction({ type: 'hideTip' });
+          graphic.push({
+            type: 'group',
+            onmouseover: show,
+            onmouseout: hide,
+            children: [
+              { type: 'line', shape: { x1: tail[0], y1: tail[1], x2: tip[0], y2: tip[1] }, style: { stroke: ink2, lineWidth: 1.5 } },
+              { type: 'polygon', shape: { points: [tip, left, right] }, style: { fill: ink2 } },
+              ...(small ? [] : [{
+                type: 'text',
+                x: tail[0], y: tail[1],
+                style: { text: `${(ar.share * 100).toFixed(1)}%`, fill: ink2, font: '12px system-ui, sans-serif',
+                  align: 'center', verticalAlign: 'middle', backgroundColor: cssVar('--surface'), padding: [1, 3] },
+              }]),
+            ],
+          });
+        }
+      }
+
+      const tip = {
+        trigger: 'item',
+        backgroundColor: cssVar('--viz-surface'),
+        borderColor: cssVar('--viz-axis'),
+        textStyle: { color: cssVar('--viz-ink'), fontSize: 13 },
+        formatter: (p) => {
+          if (p.seriesIndex === 1) {
+            const d = p.data;
+            return `${p.marker}${d.name}<br>${fmt(d.value)} · ${p.percent}% of all · `
+              + `${((d.value / d.parentValue) * 100).toFixed(1)}% of ${d.parentName}`;
+          }
+          return `${p.marker}${p.name}<br>${fmt(p.value)} · ${p.percent}%`;
+        },
+      };
       return {
         animation: false,
-        textStyle: { fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif', color: cssVar('--viz-ink-2') },
-        tooltip: {
-          trigger: 'item',
-          backgroundColor: cssVar('--viz-surface'),
-          borderColor: cssVar('--viz-axis'),
-          textStyle: { color: cssVar('--viz-ink'), fontSize: 13 },
-          formatter: (p) => `${p.marker}${p.name}<br>${fmt(p.value)} · ${p.percent}%`,
-        },
-        series: [{
-          type: 'pie',
-          radius: small ? ['38%', '70%'] : ['42%', '72%'],
-          center: ['50%', '50%'],
-          avoidLabelOverlap: true,
-          itemStyle: { borderColor: cssVar('--surface'), borderWidth: 2, borderRadius: 4 },
-          label: small ? { show: false } : { formatter: '{b}\n{d}%', color: cssVar('--viz-ink-2'), fontSize: 12 },
-          labelLine: { lineStyle: { color: cssVar('--viz-axis') } },
-          emphasis: { scale: false },
-          data: parts.map((s) => ({ name: s.name, value: s.value, gid: s.id, itemStyle: { color: colorOf(s.id) } })),
-        }],
+        textStyle: { fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif', color: ink2 },
+        tooltip: tip,
+        graphic,
+        series: [
+          {
+            type: 'pie',
+            radius: [`${r0}%`, `${r1}%`],
+            center: ['50%', '50%'],
+            avoidLabelOverlap: true,
+            itemStyle: { borderColor: surface, borderWidth: 2, borderRadius: 4 },
+            label: small ? { show: false } : { formatter: '{b}\n{d}%', color: ink2, fontSize: 12 },
+            labelLine: { lineStyle: { color: cssVar('--viz-axis') } },
+            emphasis: { scale: false },
+            data: outerParts.map((s) => ({ name: s.name, value: s.value, gid: s.id, itemStyle: { color: colorOf(s.id) } })),
+          },
+          {
+            type: 'pie',
+            radius: [`${r0}%`, `${rInner}%`],
+            center: ['50%', '50%'],
+            label: { show: false },
+            labelLine: { show: false },
+            emphasis: { scale: false },
+            data: inner,
+          },
+        ],
       };
     };
   }

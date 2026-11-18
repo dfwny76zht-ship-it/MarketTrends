@@ -386,8 +386,10 @@ def breakdown(by: str = "top", measure: str = "offers", mode: str = "snapshot", 
         groups = []
         for g in grouping["groups"]:
             subs = [x for x in grouping.get("subgroups", []) if x["parent_id"] == g["id"]] if split_subs else []
-            groups.append({"id": str(g["id"]), "name": f"{g['label']} (rest)" if subs else g["label"]})
-            groups += [{"id": str(x["id"]), "name": f"{g['label']} › {x['label']}", "parent": str(g["id"])} for x in subs]
+            groups.append({"id": str(g["id"]), "name": f"{g['label']} (rest)" if subs else g["label"], "label": g["label"],
+                           "has_subs": bool(subs)})
+            groups += [{"id": str(x["id"]), "name": f"{g['label']} › {x['label']}", "label": x["label"],
+                        "parent": str(g["id"])} for x in subs]
         keep = {g["id"] for g in groups}
     elif by == "shop":
         groups = [{"id": k, "name": names[k]} for k in sorted(totals, key=int)]
