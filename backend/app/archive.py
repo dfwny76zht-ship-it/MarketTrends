@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from psycopg.types.json import Jsonb
 
 from . import config, names, taxonomy
-from .adapters.floraccess_archive import parse_archived
+from .adapters import floraccess_archive, haage_archive
 from .auth import current_user
 from .db import pool
 
@@ -31,18 +31,40 @@ log = logging.getLogger("archive")
 router = APIRouter(prefix="/api/archive", dependencies=[Depends(current_user)])
 
 CDX = "https://web.archive.org/cdx/search/cdx"
-GAP = 5.0
+GAP = 5.0            # normal pause between archive requests (all shops together)
+BUSY_GAP = 12.0      # pause while archive.org has recently answered "busy" (503)
+BUSY_WAITS = (45, 90, 135)  # waits before retrying a page that got a 503
 FROM_YEAR = "2018"
 _lock = threading.Lock()
 _progress: dict[int, dict] = {}
 
+def _fa_kind(url: str) -> tuple[str | None, str | None]:
+    if m := re.search(r"/v/(\d+)/", url):
+        return "offer", m.group(1)
+    if m := re.search(r"/product/(\d+)/", url):
+        return "product", m.group(1)
+    if "/category/" in url:
+        return "category", None
+    return None, None
+
+
+def _haage_kind(url: str) -> tuple[str | None, str | None]:
+    path = re.sub(r"https?://(www\.)?[^/]+(:80)?", "", url).split("?")[0]
+    if re.search(r"/(Zubehoer|accessories|Literatur|books|Samen|seeds|modules|Dischidia)/", path, re.I):
+        return None, None
+    if not re.search(r"/(Pflanzen|plants)/hoya/", path, re.I):
+        return None, None
+    if path.endswith(".html"):
+        return "product", path.rsplit("/", 1)[-1].lower()
+    return "category", None
+
+
 # Per shop: which archived addresses belong to the Hoya range, and how to read them.
 SOURCES = {
-    "floraccess.com": {
-        "domain": "floraccess.com",
-        "filter": "original:.*[Hh]oya.*",
-        "reader": parse_archived,
-    },
+    "floraccess.com": {"domain": "floraccess.com", "filter": "original:.*[Hh]oya.*", "kind": _fa_kind,
+                       "reader": floraccess_archive.parse_archived, "basis": "net"},
+    "kakteen-haage.de": {"domain": "kakteen-haage.de", "filter": "original:.*[Hh]oya.*", "kind": _haage_kind,
+                         "reader": haage_archive.parse_archived, "basis": "gross"},
 }
 
 
@@ -51,16 +73,6 @@ def _source(shop: dict) -> dict:
     if not src:
         raise HTTPException(422, "No archive reader for this shop yet.")
     return src
-
-
-def _kind(url: str) -> tuple[str | None, str | None]:
-    if m := re.search(r"/v/(\d+)/", url):
-        return "offer", m.group(1)
-    if m := re.search(r"/product/(\d+)/", url):
-        return "product", m.group(1)
-    if "/category/" in url:
-        return "category", None
-    return None, None
 
 
 def _client() -> httpx.Client:
@@ -86,10 +98,10 @@ def discover(shop_id: int) -> dict:
     for ts, url, status, mime in rows:
         if status != "200" or "html" not in mime:
             continue
-        kind, key = _kind(url)
+        kind, key = src["kind"](url)
         if not kind:
             continue
-        page = key or re.sub(r"https?://(www\.)?[^/]+/[a-z]{2}/", "/", url).split("?")[0]
+        page = key or re.sub(r"https?://(www\.)?[^/]+(:80)?/([a-z]{2}/)?", "/", url).split("?")[0].lower()
         slot = (kind, page, ts[:6])
         rank = (0 if "/en/" in url else 1, ts)
         if slot not in best or rank < best[slot][0]:
@@ -125,8 +137,10 @@ def _store_snapshot(shop_id: int, run_id: int, archive_url: str, status: int, bo
         ).fetchone()["id"]
 
 
-def _import(conn, shop_id: int, run_id: int, capture: dict, offers: list[dict]) -> int:
+def _import(conn, shop_id: int, run_id: int, capture: dict, offers: list[dict], basis: str = "net") -> int:
+    """basis 'gross': prices incl. VAT (consumer shops); the net price uses the shop's VAT rate."""
     n = 0
+    vat = conn.execute("SELECT vat_rate FROM shops WHERE id = %s", (shop_id,)).fetchone()["vat_rate"]
     for o in offers:
         if not o.get("item_key") or o.get("price") is None:
             continue
@@ -160,8 +174,10 @@ def _import(conn, shop_id: int, run_id: int, capture: dict, offers: list[dict]) 
         conn.execute(
             "INSERT INTO observations (listing_id, run_id, observed_at, price, currency, price_basis, price_eur_net,"
             " availability, pot_size, plant_size, raw, source, size_class, grower)"
-            " VALUES (%s, %s, %s, %s, 'EUR', 'net', %s, %s, %s, %s, %s, 'archive', %s, %s)",
-            (lid, run_id, at, o["price"], o["price"], o["availability"], o.get("pot"), o.get("height"),
+            " VALUES (%s, %s, %s, %s, 'EUR', %s, %s, %s, %s, %s, %s, 'archive', %s, %s)",
+            (lid, run_id, at, o["price"], basis,
+             o["price"] if basis == "net" else round(o["price"] / (1 + float(vat) / 100), 4),
+             o["availability"], o.get("pot"), o.get("height"),
              Jsonb({"archive": capture["archive"], "archive_url": capture["archive_url"], "page": capture["kind"],
                     "captured_at": capture["captured_at"].isoformat(), "note": o.get("note")}),
              names.size_class(o.get("pot"), o["name"]), o.get("grower")),
@@ -171,63 +187,91 @@ def _import(conn, shop_id: int, run_id: int, capture: dict, offers: list[dict]) 
 
 
 def run(shop_id: int, limit: int | None = None) -> dict:
-    """Fetches and reads every capture not yet done (resumable). Blocks; call from a thread."""
+    return run_queue([shop_id], limit)
+
+
+def _fetch(c: httpx.Client, url: str, state: dict) -> tuple[httpx.Response | None, str | None]:
+    """One archive request; a 503 ('busy') waits and retries the same page, then slows the pace."""
+    for attempt in range(len(BUSY_WAITS) + 1):
+        try:
+            r = c.get(url)
+        except httpx.HTTPError as exc:
+            return None, type(exc).__name__
+        if r.status_code != 503:
+            return r, None
+        state["busy_until"] = time.monotonic() + 600
+        state["busy_count"] = state.get("busy_count", 0) + 1
+        if attempt < len(BUSY_WAITS):
+            state["waiting"] = BUSY_WAITS[attempt]
+            time.sleep(BUSY_WAITS[attempt])
+            state["waiting"] = None
+    return r, "HTTP 503 (archive busy)"
+
+
+def run_queue(shop_ids: list[int], limit: int | None = None) -> dict:
+    """Fetches and reads every capture not yet done for these shops, alternating between the
+    shops so all of them progress at once while archive.org sees one polite stream. Resumable."""
+    shops, todo, run_ids = {}, {}, {}
     with pool.connection() as conn:
-        shop = conn.execute("SELECT * FROM shops WHERE id = %s", (shop_id,)).fetchone()
-        src = _source(shop)
-        todo = conn.execute(
-            "SELECT * FROM archive_captures WHERE shop_id = %s AND status IN ('new', 'failed') ORDER BY captured_at"
-            + (" LIMIT %s" % int(limit) if limit else ""),
-            (shop_id,),
-        ).fetchall()
-        run_id = conn.execute("INSERT INTO runs (shop_id, kind, details) VALUES (%s, 'archive', %s) RETURNING id",
-                              (shop_id, Jsonb({"captures": len(todo)}))).fetchone()["id"]
-    prog = _progress[shop_id] = {"total": len(todo), "done": 0, "offers": 0, "unreadable": 0, "failed": 0, "running": True}
+        for sid in shop_ids:
+            shops[sid] = conn.execute("SELECT * FROM shops WHERE id = %s", (sid,)).fetchone()
+            _source(shops[sid])
+            todo[sid] = conn.execute(
+                "SELECT * FROM archive_captures WHERE shop_id = %s AND status IN ('new', 'failed') ORDER BY captured_at"
+                + (" LIMIT %s" % int(limit) if limit else ""),
+                (sid,),
+            ).fetchall()
+            run_ids[sid] = conn.execute(
+                "INSERT INTO runs (shop_id, kind, details) VALUES (%s, 'archive', %s) RETURNING id",
+                (sid, Jsonb({"captures": len(todo[sid]), "queue": shop_ids})),
+            ).fetchone()["id"]
+    # Round robin: one page of each shop in turn.
+    order = []
+    for i in range(max((len(v) for v in todo.values()), default=0)):
+        order += [todo[sid][i] for sid in shop_ids if i < len(todo[sid])]
+    prog = {sid: {"offers": 0, "done": 0} for sid in shop_ids}
+    state: dict = {}
     last = 0.0
     try:
         with _client() as c:
-            for cap in todo:
+            for cap in order:
+                sid = cap["shop_id"]
+                src = _source(shops[sid])
                 ts = cap["captured_at"].strftime("%Y%m%d%H%M%S")
                 archive_url = f"https://web.archive.org/web/{ts}id_/{cap['url']}"
-                wait = GAP - (time.monotonic() - last)
+                gap = BUSY_GAP if time.monotonic() < state.get("busy_until", 0) else GAP
+                wait = gap - (time.monotonic() - last)
                 if wait > 0:
                     time.sleep(wait)
-                try:
-                    r = c.get(archive_url)
-                except httpx.HTTPError as exc:
-                    r, err = None, type(exc).__name__
+                r, err = _fetch(c, archive_url, state)
                 last = time.monotonic()
                 if r is not None and r.status_code == 429:
                     log.warning("archive.org asks to slow down; stopping this run")
-                    prog["stopped"] = "archive.org asked to slow down — try again later"
                     break
-                if r is None or r.status_code >= 400:
+                if err or r is None or r.status_code >= 400:
                     with pool.connection() as conn:
                         conn.execute("UPDATE archive_captures SET status = 'failed', error = %s, fetched_at = now() WHERE id = %s",
-                                     (err if r is None else f"HTTP {r.status_code}", cap["id"]))
-                    prog["failed"] += 1
-                    prog["done"] += 1
+                                     (err or f"HTTP {r.status_code}", cap["id"]))
                     continue
-                snap = _store_snapshot(shop_id, run_id, archive_url, r.status_code, r.content)
+                snap = _store_snapshot(sid, run_ids[sid], archive_url, r.status_code, r.content)
                 offers = src["reader"](r.text, cap["url"], cap["kind"], cap["captured_at"])
                 with pool.connection() as conn:
-                    n = _import(conn, shop_id, run_id, dict(cap, archive="wayback", archive_url=archive_url), offers)
+                    n = _import(conn, sid, run_ids[sid], dict(cap, archive="wayback", archive_url=archive_url), offers,
+                                src["basis"])
                     conn.execute(
                         "UPDATE archive_captures SET status = %s, snapshot_id = %s, offers = %s, error = NULL, fetched_at = now()"
                         " WHERE id = %s",
                         ("parsed" if offers else "unreadable", snap, len(offers), cap["id"]),
                     )
-                prog["offers"] += n
-                prog["unreadable"] += 0 if offers else 1
-                prog["done"] += 1
+                prog[sid]["offers"] += n
+                prog[sid]["done"] += 1
     finally:
-        prog["running"] = False
         with pool.connection() as conn:
-            conn.execute(
-                "UPDATE runs SET finished_at = now(), result = 'ok', offers_found = %s, pages = %s WHERE id = %s",
-                (prog["offers"], prog["done"], run_id),
-            )
-        taxonomy.match_pending(shop_id)
+            for sid in shop_ids:
+                conn.execute("UPDATE runs SET finished_at = now(), result = 'ok', offers_found = %s, pages = %s WHERE id = %s",
+                             (prog[sid]["offers"], prog[sid]["done"], run_ids[sid]))
+        for sid in shop_ids:
+            taxonomy.match_pending(sid)
         taxonomy.backfill_size_classes()
     return prog
 
@@ -245,7 +289,7 @@ def reread(shop_id: int) -> dict:
         body = gzip.decompress((Path(config.SNAPSHOT_DIR) / cap["path"]).read_bytes()).decode("utf-8", "replace")
         offers = src["reader"](body, cap["url"], cap["kind"], cap["captured_at"])
         with pool.connection() as conn:
-            found += _import(conn, shop_id, cap["run_id"], dict(cap, archive="wayback"), offers)
+            found += _import(conn, shop_id, cap["run_id"], dict(cap, archive="wayback"), offers, src["basis"])
             conn.execute("UPDATE archive_captures SET status = %s, offers = %s WHERE id = %s",
                          ("parsed" if offers else "unreadable", len(offers), cap["id"]))
     taxonomy.match_pending(shop_id)
@@ -261,6 +305,15 @@ def _shop_or_404(shop_id: int) -> dict:
     if not shop:
         raise HTTPException(404, "Shop not found.")
     return shop
+
+
+@router.get("/shops")
+def archive_shops():
+    """Shops with an archive reader (for the progress boxes), whether or not they collect live."""
+    with pool.connection() as conn:
+        return conn.execute(
+            "SELECT s.id, s.name, (SELECT count(*) FROM archive_captures c WHERE c.shop_id = s.id) AS captures"
+            " FROM shops s WHERE s.host = ANY(%s) ORDER BY s.id", (list(SOURCES),)).fetchall()
 
 
 @router.get("/{shop_id}")
@@ -301,7 +354,7 @@ def api_run(shop_id: int):
 
     def work():
         try:
-            run(shop_id)
+            run_queue([shop_id])
         except Exception:
             log.exception("archive run failed")
         finally:

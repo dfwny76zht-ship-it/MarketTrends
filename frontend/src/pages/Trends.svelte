@@ -153,8 +153,10 @@
   .ranks { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-bottom: 4px; }
   .ranks .card { margin-bottom: 0; }
   /* One line per item: the name shortens, the numbers stay whole */
+  /* Name wraps onto a second line when needed; the numbers always stay on the first line */
+  ol li { min-width: 0; }
   .one { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
-  .one a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .one a { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
   .one .muted { flex: none; white-space: nowrap; font-size: 13px; }
   ol { margin: 0; padding-left: 20px; font-size: 14px; display: grid; gap: 3px; }
   ol a { color: var(--text); text-decoration: none; }

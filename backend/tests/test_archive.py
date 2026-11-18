@@ -98,3 +98,39 @@ def test_history_endpoints(db):
     p = trends.history_product(key=t[0]["key"], shops=[shop])
     assert p["formats"] and all(pt["source"] == "archive" for fm in p["formats"] for pt in fm["points"])
     assert trends.history_sources(shops=[shop])[0]["page"] == "category"
+
+
+def _hpage(name):
+    return gzip.decompress((FIX / f"haage_archive_{name}.html.gz").read_bytes()).decode("utf-8", "replace")
+
+
+def test_haage_archive_pages():
+    from app.adapters.haage_archive import parse_archived
+
+    old = {o["item_key"]: o for o in parse_archived(_hpage("2018_cat"), "", "category", AT)}
+    new = {o["item_key"]: o for o in parse_archived(_hpage("2025_cat"), "", "category", AT)}
+    assert len(old) == 20 and len(new) == 24
+    assert (old["113712"]["name"], old["113712"]["price"]) == ("Hoya acuta nova", 8.5)
+    assert new["113712"]["price"] == 10.5  # same article, later price
+    (p,) = parse_archived(_hpage("2022_prod"), "", "product", AT)
+    assert (p["item_key"], p["availability"]) == ("113712", "sold_out")
+
+
+def test_haage_addresses_and_gross_prices(db):
+    from app import archive
+
+    k = archive._haage_kind
+    assert k("http://www.kakteen-haage.de:80/Pflanzen/Hoya/Hoya/?")[0] == "category"
+    assert k("https://www.kakteen-haage.de/en/plants/hoya/Hoya/Hoya-kerrii-oxid.html") == ("product", "hoya-kerrii-oxid.html")
+    assert k("https://www.kakteen-haage.de/en/accessories/substrates-soil/substrates-and-soils/Hoya-soil-5-l.html") == (None, None)
+    assert k("https://www.kakteen-haage.de/en/plants/hoya/Dischidia/")[0] is None
+    with db.connection() as conn:
+        shop = conn.execute("INSERT INTO shops (name, url, host, vat_rate) VALUES ('H test', 'https://h.example/', 'h.example', 7)"
+                            " RETURNING id").fetchone()["id"]
+        run = conn.execute("INSERT INTO runs (shop_id, kind) VALUES (%s, 'archive') RETURNING id", (shop,)).fetchone()["id"]
+        offers = [{"item_key": "1", "name": "Hoya kerrii", "price": 10.70, "availability": "unknown", "observed_at": AT}]
+        cap = {"url": "u", "kind": "category", "captured_at": AT, "archive": "wayback", "archive_url": "a"}
+        assert archive._import(conn, shop, run, cap, offers, "gross") == 1
+        row = conn.execute("SELECT o.price, o.price_basis, o.price_eur_net FROM observations o JOIN listings l ON l.id = o.listing_id"
+                           " WHERE l.shop_id = %s", (shop,)).fetchone()
+    assert row["price_basis"] == "gross" and float(row["price_eur_net"]) == 10.0

@@ -86,8 +86,8 @@
       <nav>
         <a href="#/overview" class:active={page === 'overview' || page === 'taxon'}>Overview</a>
         <a href="#/trends" class:active={page === 'trends'}>Trends</a>
-        <a href="#/events" class:active={page === 'events'}>Events</a>
         <a href="#/scatter" class:active={page === 'scatter'}>Price vs. stock</a>
+        <a href="#/events" class:active={page === 'events'}>Events</a>
         <a href="#/watchlist" class:active={page === 'watchlist'}>Watchlist</a>
         <span class="sep"></span>
         <a href="#/shops" class:active={page === 'shops'}>Shops</a>

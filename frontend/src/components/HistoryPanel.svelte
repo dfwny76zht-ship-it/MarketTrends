@@ -42,27 +42,30 @@
     if (fa) api(`/archive/${fa.id}/reference-check`).then((r) => (refCheck = r)).catch(() => {});
   });
 
-  // History run progress: polled every 5 s while it runs, every minute otherwise.
-  let run = $state(null);
+  // History run progress, one box per shop with an archive reader: polled every 5 s while
+  // something runs, every minute otherwise.
+  let archShops = $state([]);
+  let runs = $state({});
   $effect(() => {
-    const fa = archiveShop;
-    if (!fa) return;
     let timer;
     let alive = true;
     const tick = async () => {
       try {
-        const r = await api(`/archive/${fa.id}/status`);
-        const finishedNow = run?.running && !r.running;
-        run = r;
-        if (finishedNow) api(`/archive/${fa.id}/reference-check`).then((x) => (refCheck = x)).catch(() => {});
+        archShops = (await api('/archive/shops')).filter((x) => x.captures > 0);
+        const next = {};
+        for (const sh of archShops) next[sh.id] = await api(`/archive/${sh.id}/status`);
+        const fa = archShops.find((x) => x.name === 'FlorAccess');
+        if (fa && runs[fa.id]?.running && !next[fa.id]?.running)
+          api(`/archive/${fa.id}/reference-check`).then((x) => (refCheck = x)).catch(() => {});
+        runs = next;
       } catch { /* keep the last state */ }
-      if (alive) timer = setTimeout(tick, run?.running ? 5000 : 60000);
+      if (alive) timer = setTimeout(tick, Object.values(runs).some((r) => r.running) ? 5000 : 60000);
     };
     tick();
     return () => { alive = false; clearTimeout(timer); };
   });
-  async function continueRun() {
-    try { await api(`/archive/${archiveShop.id}/run`, { method: 'POST' }); run = { ...run, running: true }; }
+  async function continueRun(shopId) {
+    try { await api(`/archive/${shopId}/run`, { method: 'POST' }); runs[shopId] = { ...runs[shopId], running: true }; }
     catch (e) { error = e.message; }
   }
   const PAGE_KIND = { category: 'category page', offer: 'grower offer page', product: 'product page' };
@@ -217,13 +220,15 @@
     {/if}
   </div>
 
+  {#each archShops as sh (sh.id)}
+  {@const run = runs[sh.id]}
   {#if run && run.total}
     <div class="runbox">
       <div class="run-head">
         <span class="dot" class:live={run.running}></span>
-        <strong>History run · FlorAccess</strong>
+        <strong>History run · {sh.name}</strong>
         <span class="muted">{run.running ? 'running' : run.waiting || run.failed ? 'stopped' : 'finished'}</span>
-        {#if !run.running && (run.waiting || run.failed)}<button class="small" onclick={continueRun}>Continue ({run.waiting + run.failed} left)</button>{/if}
+        {#if !run.running && (run.waiting || run.failed)}<button class="small" onclick={() => continueRun(sh.id)}>Continue ({run.waiting + run.failed} left)</button>{/if}
       </div>
       <div class="bar"><span style="width:{Math.round((run.done / run.total) * 100)}%"></span></div>
       <div class="run-grid">
@@ -250,6 +255,7 @@
       {/if}
     </div>
   {/if}
+  {/each}
 </div>
 
   {#if refCheck?.rows?.length}

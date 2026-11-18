@@ -29,7 +29,7 @@ def main() -> None:
     sub.add_parser("images", help="copy new offer photos now")
     arc = sub.add_parser("archive", help="history from web archives")
     arc.add_argument("action", choices=["discover", "run", "reread", "reference"])
-    arc.add_argument("shop_id", type=int)
+    arc.add_argument("shop_ids", type=int, nargs="+")
     arc.add_argument("--limit", type=int)
     arc.add_argument("--csv", help="reference CSV (for 'reference'), read from stdin if '-'")
     args = parser.parse_args()
@@ -41,14 +41,16 @@ def main() -> None:
         pool.open(wait=True)
         try:
             if args.action == "discover":
-                print(archive.discover(args.shop_id))
+                for sid in args.shop_ids:
+                    print(sid, archive.discover(sid))
             elif args.action == "run":
-                print(archive.run(args.shop_id, args.limit))
+                print(archive.run_queue(args.shop_ids, args.limit))
             elif args.action == "reread":
-                print(archive.reread(args.shop_id))
+                for sid in args.shop_ids:
+                    print(sid, archive.reread(sid))
             else:
                 text = sys.stdin.read() if args.csv in (None, "-") else open(args.csv, encoding="utf-8").read()
-                print(archive.import_reference(args.shop_id, text), "reference rows")
+                print(archive.import_reference(args.shop_ids[0], text), "reference rows")
         finally:
             pool.close()
         return
