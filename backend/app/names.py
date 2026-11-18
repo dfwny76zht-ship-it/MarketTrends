@@ -20,7 +20,7 @@ _NOISE = [
 ]
 _SIZE_SUFFIX = re.compile(r"\s+(xs|s|m|l|xl|xxl)\s*$", re.I)
 
-COLLECTION_RE = re.compile(r"\b(IPPS|IML|EPC|GPS|RB|SR|UT|CMB|AH|GB|DS|JM|PG|BS|NS)[\s\-.]?(\d{2,5}[A-Za-z]?)\b", re.I)
+COLLECTION_RE = re.compile(r"\b(IPPS|IML|EPC|GPS|RB|SR|UT|CMB|AH|GB|DS|JM|PG|BS|NS)[\s\-.]?(\d{2,5}(?:-\d{1,4})?[A-Za-z]?)\b", re.I)
 
 # Places in names: a plant from a collection site or region is almost always a form (locality form)
 # of its species, not a bred cultivar.

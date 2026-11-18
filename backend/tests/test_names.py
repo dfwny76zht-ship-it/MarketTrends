@@ -87,3 +87,5 @@ def test_places_and_collection_numbers_are_forms():
     assert r.kind == "form"
     r = p("Hoya 'Rosita'")
     assert r.kind == "hybrid"
+    r = p("Hoya alagensis NS05-232")
+    assert (r.collection_no, r.cultivar, r.kind) == ("NS 05-232", "NS 05-232", "form")
