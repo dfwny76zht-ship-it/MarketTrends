@@ -1,0 +1,90 @@
+:root {
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --surface-2: #eef0ec;
+  --text: #1c211d;
+  --muted: #5d665f;
+  --border: #d9ddd7;
+  --accent: #2f6f4e;
+  --accent-text: #ffffff;
+  --good: #2f6f4e;
+  --good-bg: #e2f0e7;
+  --bad: #a3312b;
+  --bad-bg: #f8e3e1;
+  --warn: #8a5a00;
+  --warn-bg: #f7ecd4;
+  --neutral-bg: #eceeea;
+  --radius: 8px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131714;
+    --surface: #1b201c;
+    --surface-2: #232924;
+    --text: #e6eae6;
+    --muted: #9aa49c;
+    --border: #2f3731;
+    --accent: #5fae84;
+    --accent-text: #0e1a12;
+    --good: #7cc79c;
+    --good-bg: #1f3428;
+    --bad: #f08a83;
+    --bad-bg: #3a2120;
+    --warn: #e2b55a;
+    --warn-bg: #3a2f17;
+    --neutral-bg: #262c27;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button:hover { background: var(--surface-2); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+button.primary:hover { filter: brightness(1.08); }
+
+input, select, textarea {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  white-space: nowrap;
+  background: var(--neutral-bg);
+}
+.badge.good { background: var(--good-bg); color: var(--good); }
+.badge.bad { background: var(--bad-bg); color: var(--bad); }
+.badge.warn { background: var(--warn-bg); color: var(--warn); }
+
+.error { color: var(--bad); }
+.muted { color: var(--muted); }

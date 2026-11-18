@@ -1,166 +1,169 @@
 # Market Trends
 
-Projektbrief für Claude Code, Stand 18.11.2026.
+Project brief for Claude Code, as of 2026-11-18.
 
-Eigenständiges Projekt von GeniScent, getrennt von LIMS und GeniScent-API: eigener Ordner (`~/MarketTrends`), eigenes Repo, eigene Datenbank, eigener Login.
+A standalone GeniScent project, separate from the LIMS and the GeniScent API: its own folder (`~/MarketTrends`), its own repo, its own database, its own login.
 
-Die Datenbank ist eine eigene PostgreSQL-Instanz (eigener Container, eigenes Volume, eigene Zugangsdaten). Sie teilt sich weder Server noch Datenbank noch Benutzer mit der GeniScent-API/LIMS, und es gibt keine Verbindung zwischen beiden.
+The database is its own PostgreSQL instance (own container, own volume, own credentials). It shares no server, database or user with the GeniScent API/LIMS, and the two are not connected.
 
-## Ziel
+## Goal
 
-Hoya-Angebote von Händlern, Gärtnereien, Großhändlern und Importhändlern laufend erfassen und als Zeitreihen auswerten:
-- Welche Arten und Sorten gibt es wo, zu welchem Preis, wie lange verfügbar und in welcher Menge?
-- Welche Arten werden shopübergreifend häufig geliefert?
-- Wie hängen die Shops zusammen?
-- Zu welchen Konditionen verkaufen Groß- und Importhändler?
+Continuously record Hoya offers from retailers, nurseries, wholesalers and importers, and analyse them as time series:
+- Which species and cultivars are offered where, at what price, for how long and in what quantity?
+- Which species are restocked frequently across shops?
+- How are the shops connected?
+- On what terms do wholesalers and importers sell?
 
-Die Ergebnisse fließen in Sortiment, Preise und Marktargumente ein.
+The results feed into our range, prices and market arguments.
 
-## Betrieb
+## Operation
 
-- Bedienung nur im Browser (Desktop zuerst, mobil lesbar), nicht am Bildschirm des Pi.
-- **Hetzner** (bereit): Web-Tool, eigene PostgreSQL-Instanz (siehe oben), Zeitplan aller Läufe.
-- **Raspberry Pi im Lab** (bereit): zweiter Sammler für Shops, die Rechenzentrums-IPs sperren, und Ablage für das nächtliche Datenbank-Backup. Der Pi verbindet sich nur ausgehend mit Hetzner (Token).
-- Docker Compose. HTTPS über das vorhandene nginx auf Hetzner, eigener Port 8445 (443 belegt der SSH-Zugang). Die GeniScent-API bleibt unverändert. Zugang für beide Gründer:innen.
+- Used only in the browser (desktop first, readable on mobile), not on the Pi's screen.
+- **Hetzner** (ready): web tool, its own PostgreSQL instance (see above), schedule for all runs.
+- **Raspberry Pi in the lab** (ready): second collector for shops that block data-centre IPs, and storage for the nightly database backup. The Pi only connects outward to Hetzner (token).
+- Docker Compose. HTTPS through the existing nginx on Hetzner, own port 8445 (443 is used by SSH). The GeniScent API stays unchanged. Access for both founders.
+- **No Anthropic API key.** Everything Claude does (see 3) happens by hand: in the Claude app (preferred) or in a Claude Code session, on the existing subscription.
 
-## Funktionen
+## Features
 
 ### 1. Shops
-- Liste aller Shops mit Status: vorgeschlagen, in Einrichtung, aktiv, pausiert, nicht erlaubt, Adapter defekt.
-- „+“ legt einen Shop mit URL und Notiz an. Er bleibt „in Einrichtung“, bis ein Adapter steht (siehe 3).
-- Typen: Großhandel, Importhändler, Händler, Gärtnerei.
-- Steckbrief je Shop:
-  - Land, Währung, netto oder brutto;
-  - Zugang: öffentlich oder eigenes Kundenkonto;
-  - welche Daten der Shop liefert (Preis, Verfügbarkeit, Stückzahl, Topfgröße);
-  - letzter Lauf, Fehler, Prüfdatum von robots.txt und AGB;
-  - Konditionen mit Änderungsverlauf: Mindestbestellwert, Mindestmengen, Staffelpreise, Versand- und Phytokosten, Lieferzeit, Zahlungsbedingungen, Import- oder Liefertermine.
-- Start mit:
-  - Uhlig: uhlig-kakteen.de, JTL-Shop, nur Verfügbarkeit;
-  - FlorAccess: floraccess.com, Großhandel mit Stückzahlen;
-  - Kakteen-Haage: kakteen-haage.de, RSS-Feed der Hoya-Kategorie;
-  - Jungle Leaves: jungle-leaves.de, Shopify, Hoyas unter „Sukkulenten“;
+- List of all shops with status: suggested, in setup, active, paused, not allowed, adapter broken.
+- "+" adds a shop with URL and note. It stays "in setup" until an adapter exists (see 3).
+- Types: wholesaler, importer, retailer, nursery.
+- Profile per shop:
+  - country, currency, net or gross prices;
+  - access: public or own customer account;
+  - which data the shop provides (price, availability, quantity, pot size);
+  - last run, errors, date robots.txt and terms were checked;
+  - terms with change history: minimum order value, minimum quantities, tiered prices, shipping and phyto costs, delivery time, payment terms, import or delivery dates.
+- Starting shops (all public, no customer accounts needed):
+  - Uhlig: uhlig-kakteen.de, JTL shop, availability only;
+  - FlorAccess: floraccess.com, wholesaler with quantities;
+  - Kakteen-Haage: kakteen-haage.de, RSS feed of the Hoya category;
+  - Jungle Leaves: jungle-leaves.de, Shopify, Hoyas under "Sukkulenten";
   - Ben's Jungle: bens-jungle.com.
 
-### 2. Datenerfassung (ohne Claude)
-- Läuft automatisch, je Shop höchstens einmal täglich und nachts, seltener wenn der Shop es verlangt.
-- Je Shop ein Adapter mit einheitlicher Ausgabe. Vorhandene Schnittstellen haben Vorrang: Shopify-JSON, WooCommerce Store API, RSS. Erst danach wird HTML ausgewertet.
-- Shops mit eigenem Kundenkonto werden eingeloggt abgefragt. Die Zugangsdaten liegen in `.env` oder einem Secret-Store, nie im Repo. Sitzungen werden wiederverwendet.
-- Gespeichert wird alles, was der Shop zeigt:
-  - Name wie im Shop, Artikelnummer, URL, Kategorie, Bild-URL;
-  - Preis und Staffelpreise, Währung;
-  - Verfügbarkeitstext und daraus ein einheitlicher Status (verfügbar, knapp, ausverkauft, unbekannt);
-  - Stückzahl, Topf- und Pflanzengröße;
-  - Zeitpunkt.
-- Zusätzlich wird die Rohseite komprimiert gespeichert. So lassen sich alte Daten neu auswerten, wenn ein Adapter besser wird.
-- Preise werden intern zusätzlich vereinheitlicht: netto, in EUR zum Tageskurs, nach Größenklasse.
-- Das Tool leitet Ereignisse ab: neu, verschwunden, ausverkauft, wieder verfügbar, Stückzahl gestiegen (Nachlieferung), Preisänderung.
-- Wo Artikelnummern fortlaufend vergeben werden (z. B. FlorAccess), schätzt das Tool daraus, wann ein Angebot angelegt wurde.
+### 2. Data collection (without Claude)
+- Runs automatically, at most once a day per shop and at night, less often if the shop asks for it.
+- One adapter per shop with a uniform output. Existing interfaces come first: Shopify JSON, WooCommerce Store API, RSS. Only then is HTML parsed.
+- Customer accounts are only created when a shop shows nothing useful without one, and only by hand. If one exists, the shop is queried logged in. Credentials live in `.env` or a secret store, never in the repo. Sessions are reused.
+- Everything the shop shows is stored:
+  - name as in the shop, item number, URL, category, image URL;
+  - price and tiered prices, currency;
+  - availability text and a uniform status derived from it (available, low, sold out, unknown);
+  - quantity, pot and plant size;
+  - timestamp.
+- The raw page is also stored compressed, so old data can be re-parsed when an adapter improves.
+- Prices are also normalised internally: net, in EUR at the daily rate, by size class.
+- The tool derives events: new, disappeared, sold out, back in stock, quantity increased (restock), price change.
+- Where item numbers are assigned sequentially (e.g. FlorAccess), the tool estimates from them when an offer was created.
 
-### 3. Pflege und Shopsuche durch Claude
-- Claude Code arbeitet einmal im Monat automatisch und jederzeit per Knopf im Tool. Das Ergebnis kommt als Pull Request zur Freigabe, dazu ein Hinweis per ntfy.
-- **Adapter pflegen:**
-  1. robots.txt und AGB prüfen und das Ergebnis festhalten.
-  2. Seitenstruktur ansehen und den Adapter schreiben oder anpassen.
-  3. Den Adapter gegen gespeicherte Rohseiten testen.
-- **Konditionen aktualisieren:** Claude liest Konditionen aus FAQ, AGB und Versandseiten und schreibt sie in den Steckbrief.
-- **Neue Shops suchen:** Händler, Gärtnereien, Großhändler und Importhändler mit Hoya-Angebot, auch Exporteure, die in die EU liefern. Treffer erscheinen mit kurzer Begründung als „vorgeschlagen“ und werden per Klick aufgenommen.
-- Der tägliche Lauf braucht Claude nicht. Liefert ein Adapter keine Treffer, Parserfehler oder eine stark abweichende Anzahl, markiert das Tool den Shop für den nächsten Pflegelauf.
+### 3. Maintenance and shop search with Claude (by hand)
+- No automatic Claude runs and no API key. The tool tells you when something needs Claude (ntfy plus a "needs maintenance" list); you start it.
+- **Text tasks in the Claude app** (same pattern as the "For Claude" button in GeniScent Studies):
+  - The tool's "For Claude" button copies a ready-made prompt to the clipboard: the task, the shop's URLs, what is already known, and the exact answer format.
+  - You paste it into the Claude app. Claude reads the pages with web search and answers in the fixed format.
+  - You paste the answer back into the tool. It shows what would change; you confirm.
+  - Used for: **checking terms of service** (is automated access allowed?), **updating terms** (from FAQ, terms and shipping pages into the profile), **finding new shops** (retailers, nurseries, wholesalers, importers with Hoyas, including exporters shipping to the EU; results appear as "suggested" with a short reason and are added with one click).
+- **Adapters (code) in Claude Code:** writing or fixing an adapter changes code in the repo, so it happens in a Claude Code session (terminal or the Code tab in the desktop app):
+  1. check robots.txt and terms and record the result;
+  2. look at the page structure and write or adjust the adapter;
+  3. test the adapter against stored raw pages;
+  4. deploy.
+- The daily run does not need Claude. If an adapter returns no results, parser errors or a strongly deviating count, the tool marks the shop for maintenance and sends an ntfy message.
+- Once a month an ntfy reminder: "Market Trends: maintenance due", with the number of flagged shops.
 
-### 4. Vorsichtsregeln
-- Öffentliche Seiten und eigene Kundenkonten. Andere Login-Bereiche bleiben außen vor.
-- Für öffentliche Seiten wird robots.txt vor jedem Lauf geprüft. Verbieten die AGB automatisierten Zugriff, bekommt der Shop den Status „nicht erlaubt“ und wird nicht abgefragt.
-- Höchstens ein Lauf am Tag und mindestens 5 Sekunden Abstand zwischen Anfragen. Bedingte Anfragen (ETag, If-Modified-Since).
-- User-Agent mit Projektnamen und ohne Kontaktadresse. Kein Kontakt zu Shops: keine Formulare, keine Mails, keine Newsletter-Anmeldungen.
-- Bei 403 oder 429 bricht der Lauf ab und das Tool fragt seltener ab.
-- Die Daten werden nur intern genutzt und weder veröffentlicht noch weitergegeben. Personenbezogene Daten wie Bewertungen werden nicht gespeichert.
+### 4. Safety rules
+- Public pages and our own customer accounts only. Other login areas stay off limits.
+- For public pages, robots.txt is checked before every run. If the terms forbid automated access, the shop gets status "not allowed" and is not queried.
+- At most one run per day and at least 5 seconds between requests. Conditional requests (ETag, If-Modified-Since).
+- User agent with the project name and no contact address. No contact with shops: no forms, no emails, no newsletter sign-ups, no automated account creation.
+- On 403 or 429 the run stops and the tool queries less often.
+- The data is used internally only and is neither published nor shared. Personal data such as reviews is not stored.
 
-### 5. Arten und Sorten
-- Eine im Tool pflegbare Taxonomie: Art (z. B. Hoya carnosa), darunter Sorte oder Form (z. B. ‚Krimson Queen‘, Splash). Die Artenliste wird beim Start einmalig aus dem LIMS übernommen, falls es dort eine gibt; danach gibt es keine Verbindung zum LIMS mehr.
-- Jedes Angebot gehört zu einer Art und optional zu einer Sorte. Das Tool schlägt Zuordnungen vor. Grundlage sind Namensvergleich, früher bestätigte Schreibweisen und Sammelnummern wie EPC oder IML.
-- Vorschläge werden einzeln oder gesammelt bestätigt. Was nicht zugeordnet ist, landet in einer Liste zum Abarbeiten.
-- Eine einmal zugeordnete Schreibweise gilt künftig automatisch.
+### 5. Species and cultivars
+- A taxonomy maintained in the tool: species (e.g. Hoya carnosa), below it cultivar or form (e.g. 'Krimson Queen', Splash). The species list is copied once from the LIMS at the start; after that there is no connection to the LIMS.
+- Every offer belongs to a species and optionally a cultivar. The tool suggests assignments based on name matching, previously confirmed spellings and collection numbers such as EPC or IML.
+- Suggestions are confirmed one by one or in bulk. Anything unassigned goes to a work list.
+- A spelling once assigned applies automatically from then on.
 
-### 6. Auswertung (Vorbild: YouTube Analytics)
-- **Übersicht:** Zeitraum wählbar (7 Tage bis alles), Shopfilter. Kennzahlen mit Verlauf: beobachtete Arten und Angebote, Ereignisse, Preisänderungen.
-- **Seite je Art und Sorte:**
-  - Preis im Zeitverlauf, je Shop und als Median;
-  - Verfügbarkeit als Zeitleiste je Shop;
-  - Stückzahl und daraus der geschätzte Abverkauf;
-  - Zahl der anbietenden Shops;
-  - Preise nach Größenklasse.
-- **Grafikfenster:** wie im erweiterten Modus von YouTube Analytics, oben die Grafik und darunter die Tabelle.
-  - Wer Zeilen in der Tabelle oder in der Suche anhakt, sieht diese Arten und Sorten übereinander verglichen.
-  - Die Kennzahl ist wählbar: Preis, Verfügbarkeit, Stückzahl oder Ereignisse.
-  - Das Fenster lässt sich andocken, in der Größe ändern, einklappen und maximieren und bleibt beim Wechsel der Seite erhalten.
-- Eine Merkliste für Arten, zu denen Ereignisse gemeldet werden (siehe 10).
-- Tabellen lassen sich sortieren und filtern, zeigen kleine Verlaufsgrafiken und lassen sich als CSV exportieren.
-- Zu jedem Wert ist die Herkunft sichtbar: Shop, Zeitpunkt, live oder Archiv. Fehlende Werte bleiben leer und werden nicht geschätzt.
+### 6. Analysis (model: YouTube Analytics)
+- **Overview:** selectable period (7 days to all), shop filter. Key figures with history: species and offers observed, events, price changes.
+- **Page per species and cultivar:**
+  - price over time, per shop and as median;
+  - availability as a timeline per shop;
+  - quantity and the estimated sell-through derived from it;
+  - number of shops offering it;
+  - prices by size class.
+- **Chart window:** like the advanced mode of YouTube Analytics, chart on top and table below.
+  - Ticking rows in the table or the search compares those species and cultivars on top of each other.
+  - The metric is selectable: price, availability, quantity or events.
+  - The window can be docked, resized, collapsed and maximised, and stays open when switching pages.
+- A watchlist of species for which events are reported (see 10).
+- Tables can be sorted and filtered, show small trend charts and export as CSV.
+- Every value shows its origin: shop, time, live or archive. Missing values stay empty and are not estimated.
 
-### 7. Trends ohne KI
-- Alle Trends sind regelbasiert und statistisch berechnet; KI ist dafür nicht nötig.
-- Gezählt werden die Ereignisse je Art und Sorte und Woche über alle Shops.
-- Trendwert: die letzten 4 Wochen gegen die 12 Wochen davor.
-- Ranglisten, z. B.:
-  - „shopübergreifend am häufigsten nachgeliefert“ (etwa Hoya ‚Rosita‘);
-  - neu aufgetaucht, verschwunden;
-  - Preis gefallen oder gestiegen.
-- Signale aus dem Großhandel: Zugänge und Abverkauf bei Groß- und Importhändlern aus den Stückzahlen, Import- und Liefertermine aus den Konditionen.
-- Optional als Hintergrundreihe: monatliche Importe lebender Pflanzen nach Herkunftsland (Eurostat Comext, z. B. aus Thailand).
+### 7. Trends without AI
+- All trends are rule-based and statistical; no AI needed.
+- Events are counted per species and cultivar per week across all shops.
+- Trend score: the last 4 weeks against the 12 weeks before.
+- Rankings, e.g.:
+  - "most frequently restocked across shops" (such as Hoya 'Rosita');
+  - newly appeared, disappeared;
+  - price fallen or risen.
+- Signals from wholesale: incoming stock and sell-through at wholesalers and importers from quantities, import and delivery dates from the terms.
+- Optional background series: monthly imports of live plants by country of origin (Eurostat Comext, e.g. from Thailand).
 
-### 8. Verflechtungen zwischen Shops
-- Ebenfalls ohne KI berechnet:
-  - Überschneidung der Sortimente;
-  - zeitliche Abfolge von Ereignissen, etwa wenn ein Großhändler Ware bekommt und ein Händler sie Tage später listet;
-  - gleichzeitige Preisänderungen;
-  - identische Produktfotos (Bild-Hash) und gleiche Lieferantencodes.
-- Darstellung als Matrix und als Netz der Shops, mit der Stärke jeder Verbindung und Beispielen. Das sind Hinweise, keine Beweise.
+### 8. Connections between shops
+- Also computed without AI:
+  - overlap of ranges;
+  - order of events in time, e.g. a wholesaler receives stock and a retailer lists it days later;
+  - simultaneous price changes;
+  - identical product photos (image hash) and identical supplier codes.
+- Shown as a matrix and as a network of shops, with the strength of each connection and examples. These are hints, not proof.
 
-### 9. Rückwirkende Daten
-- Einmaliger Lauf je Shop, manuell gestartet. Er sucht in der Wayback Machine (CDX-API) und in Common Crawl nach alten Kategorie- und Artikelseiten und wertet sie mit Archiv-Parsern aus.
-- Archivdaten sind gröber: einzelne Zeitpunkte und alte Layouts. Die Grafiken kennzeichnen sie, z. B. gestrichelt.
-- Auch diese Abfragen laufen mit Pausen zwischen den Anfragen.
+### 9. Historical data
+- One-off run per shop, started by hand. It searches the Wayback Machine (CDX API) and Common Crawl for old category and product pages and parses them with archive parsers.
+- Archive data is coarser: single points in time and old layouts. Charts mark it, e.g. dashed.
+- These requests also pause between requests.
 
-### 10. Benachrichtigungen
-- **ntfy** (Server und Topic wie in der bestehenden Einrichtung) meldet:
-  - Adapter defekt;
-  - Pflegelauf wartet auf Freigabe;
-  - neue Shop-Vorschläge;
-  - Ereignisse zu Arten auf der Merkliste.
-- **Wochenmail** an die GeniScent-Adresse bei Proton: kurze Zusammenfassung der Woche mit den wichtigsten Trends und einem Link zur Auswertung. Versand per SMTP.
+### 10. Notifications
+- **ntfy** (server and topic as in the existing setup) reports:
+  - adapter broken;
+  - shop flagged for maintenance, and the monthly maintenance reminder;
+  - events for species on the watchlist.
+- **Weekly summary** of the main trends with a link to the analysis. Channel still open: ntfy, or email to the GeniScent Proton address (decided in step 5).
 
-## Datenmodell (Kern)
+## Data model (core)
 
-`shops`, `shop_terms` (Konditionen mit Verlauf), `shop_candidates`, `adapters` (Version, Status), `runs` (Zeit, Ergebnis, Fehler), `listings` (Shop, Artikelnr., URL, zuerst/zuletzt gesehen), `observations` (Listing, Zeit, Preis, Währung, netto/brutto, Status, Stückzahl, Größen, Rohfelder als JSON, Quelle live/Archiv), `events`, `species`, `cultivars`, `aliases`, `assignments` (Listing → Art/Sorte, bestätigt ja/nein), `image_hashes`, `watchlist`, `snapshots` (Rohseite, komprimiert), optional `trade_stats`.
+`users`, `shops`, `shop_terms` (terms with history), `shop_candidates`, `adapters` (version, status), `runs` (time, result, error), `listings` (shop, item no., URL, first/last seen), `observations` (listing, time, price, currency, net/gross, status, quantity, sizes, raw fields as JSON, source live/archive), `events`, `species`, `cultivars`, `aliases`, `assignments` (listing → species/cultivar, confirmed yes/no), `image_hashes`, `watchlist`, `snapshots` (raw page, compressed), optional `trade_stats`.
 
-## Technik (Vorschlag)
+## Tech (proposal)
 
-- Backend: Python, FastAPI, PostgreSQL (eigene Instanz im eigenen Container, nicht die Datenbank von LIMS oder GeniScent-API).
-- Erfassung: httpx und selectolax; Playwright für Logins und für Seiten, die ohne JavaScript nichts zeigen.
-- Auswertung: pandas für Trends; imagehash für Produktfotos.
-- Zeitplan: systemd-Timer oder APScheduler.
-- Frontend: kleines SPA mit Svelte und Apache ECharts.
-- Benachrichtigungen: ntfy per HTTP, Mail per SMTP.
-- Tests: je Adapter gegen gespeicherte Rohseiten.
-- Backup: nächtlicher pg_dump mit Kopie auf den Pi.
+- Backend: Python, FastAPI, PostgreSQL (own instance in its own container, not the LIMS or GeniScent API database).
+- Collection: httpx and selectolax; Playwright for logins and for pages that show nothing without JavaScript.
+- Analysis: pandas for trends; imagehash for product photos.
+- Scheduling: APScheduler.
+- Frontend: small SPA with Svelte and Apache ECharts.
+- Notifications: ntfy over HTTP.
+- Tests: per adapter against stored raw pages.
+- Backup: nightly pg_dump with a copy to the Pi.
 
-## Bei Einrichtung eintragen (`.env`)
+## To fill in at setup (`.env`)
 
-- Domain;
-- ntfy-Server und Topic;
-- Proton-Adresse und SMTP-Zugang;
-- Anthropic-API-Schlüssel und GitHub-Zugang für den Pflegelauf;
-- Zugangsdaten der Kundenkonten;
-- Token für den Pi.
+- domain and port;
+- ntfy server and token;
+- token for the Pi;
+- later, only if needed: credentials for customer accounts, SMTP access for the weekly email.
 
-## Reihenfolge
+## Order
 
-1. Grundgerüst: Datenbank, Läufe, Shopliste mit „+“, Login, Deployment auf Hetzner, ntfy.
-2. Adapter für die fünf Startshops.
-3. Arten und Sorten mit Zuordnungsvorschlägen.
-4. Auswertung mit Grafikfenster und Merkliste.
-5. Trends und Wochenmail.
-6. Pi als zweiter Sammler und Backup.
-7. Verflechtungen zwischen Shops.
-8. Rückwirkende Daten.
-9. Monatlicher Pflegelauf mit Shopsuche durch Claude Code.
+1. Foundation: database, runs, shop list with "+", login, deployment on Hetzner, ntfy.
+2. Adapters for the five starting shops.
+3. Species and cultivars with assignment suggestions.
+4. Analysis with chart window and watchlist.
+5. Trends and weekly summary.
+6. Pi as second collector and backup.
+7. Connections between shops.
+8. Historical data.
+9. "For Claude" buttons: terms check, terms update, shop search (Claude app); maintenance list and monthly reminder.
