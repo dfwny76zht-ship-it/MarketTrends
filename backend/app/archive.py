@@ -371,3 +371,45 @@ def reference_check(shop_id: int):
     for x in out:
         summary[x["status"]] += 1
     return {"summary": dict(summary), "rows": out}
+
+
+@router.get("/{shop_id}/status")
+def status(shop_id: int):
+    """Progress of the history run, read from the database (the run may live in another process)."""
+    _shop_or_404(shop_id)
+    with pool.connection() as conn:
+        counts = {r["status"]: r for r in conn.execute(
+            "SELECT status, count(*) AS n, coalesce(sum(offers), 0) AS offers FROM archive_captures WHERE shop_id = %s GROUP BY 1",
+            (shop_id,))}
+        run = conn.execute(
+            "SELECT id, started_at, finished_at, result FROM runs WHERE shop_id = %s AND kind = 'archive' ORDER BY id DESC LIMIT 1",
+            (shop_id,)).fetchone()
+        recent = conn.execute(
+            "SELECT to_char(captured_at, 'YYYY-MM') AS month, kind, url, status, offers, error, fetched_at"
+            " FROM archive_captures WHERE shop_id = %s AND fetched_at IS NOT NULL ORDER BY fetched_at DESC LIMIT 6",
+            (shop_id,)).fetchall()
+        nxt = conn.execute(
+            "SELECT to_char(captured_at, 'YYYY-MM') AS month, kind, url FROM archive_captures"
+            " WHERE shop_id = %s AND status IN ('new', 'failed') ORDER BY captured_at LIMIT 1", (shop_id,)).fetchone()
+        rate = conn.execute(
+            "SELECT count(*) AS n, extract(epoch FROM max(fetched_at) - min(fetched_at)) AS secs FROM ("
+            "  SELECT fetched_at FROM archive_captures WHERE shop_id = %s AND fetched_at > now() - interval '15 minutes'"
+            "  ORDER BY fetched_at DESC LIMIT 30) t", (shop_id,)).fetchone()
+        obs = conn.execute(
+            "SELECT count(*) AS n FROM observations o JOIN listings l ON l.id = o.listing_id"
+            " WHERE l.shop_id = %s AND o.source = 'archive'", (shop_id,)).fetchone()["n"]
+    n = lambda s: counts.get(s, {}).get("n", 0)
+    total = sum(r["n"] for r in counts.values())
+    done = n("parsed") + n("unreadable")
+    running = bool(run and run["finished_at"] is None)
+    per_min = None
+    if rate["n"] and rate["n"] > 1 and rate["secs"]:
+        per_min = round((rate["n"] - 1) / float(rate["secs"]) * 60, 1)
+    left = n("new") + n("failed")
+    return {
+        "total": total, "parsed": n("parsed"), "unreadable": n("unreadable"), "failed": n("failed"), "waiting": n("new"),
+        "done": done, "offers_read": sum(r["offers"] for r in counts.values()), "observations": obs,
+        "running": running, "started_at": run["started_at"] if run else None,
+        "per_min": per_min, "eta_min": round(left / per_min) if per_min and running else None,
+        "next": nxt if running else None, "recent": recent,
+    }

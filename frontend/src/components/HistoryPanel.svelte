@@ -36,10 +36,38 @@
   });
 
   // Reference check (hand-collected rows) for the FlorAccess archive.
+  const archiveShop = $derived(meta.shops.find((s) => s.name === 'FlorAccess'));
   $effect(() => {
-    const fa = meta.shops.find((s) => s.name === 'FlorAccess');
+    const fa = archiveShop;
     if (fa) api(`/archive/${fa.id}/reference-check`).then((r) => (refCheck = r)).catch(() => {});
   });
+
+  // History run progress: polled every 5 s while it runs, every minute otherwise.
+  let run = $state(null);
+  $effect(() => {
+    const fa = archiveShop;
+    if (!fa) return;
+    let timer;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const r = await api(`/archive/${fa.id}/status`);
+        const finishedNow = run?.running && !r.running;
+        run = r;
+        if (finishedNow) api(`/archive/${fa.id}/reference-check`).then((x) => (refCheck = x)).catch(() => {});
+      } catch { /* keep the last state */ }
+      if (alive) timer = setTimeout(tick, run?.running ? 5000 : 60000);
+    };
+    tick();
+    return () => { alive = false; clearTimeout(timer); };
+  });
+  async function continueRun() {
+    try { await api(`/archive/${archiveShop.id}/run`, { method: 'POST' }); run = { ...run, running: true }; }
+    catch (e) { error = e.message; }
+  }
+  const PAGE_KIND = { category: 'category page', offer: 'grower offer page', product: 'product page' };
+  const ago = (iso) => { const s = Math.round((Date.now() - new Date(iso)) / 1000); return s < 60 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; };
+  const shortUrl = (u) => (u || '').replace(/^https?:\/\/(www\.)?[^/]+/, '');
 
   let seq = 0;
   $effect(() => {
@@ -189,8 +217,43 @@
     {/if}
   </div>
 
+  {#if run && run.total}
+    <div class="runbox">
+      <div class="run-head">
+        <span class="dot" class:live={run.running}></span>
+        <strong>History run · FlorAccess</strong>
+        <span class="muted">{run.running ? 'running' : run.waiting || run.failed ? 'stopped' : 'finished'}</span>
+        {#if !run.running && (run.waiting || run.failed)}<button class="small" onclick={continueRun}>Continue ({run.waiting + run.failed} left)</button>{/if}
+      </div>
+      <div class="bar"><span style="width:{Math.round((run.done / run.total) * 100)}%"></span></div>
+      <div class="run-grid">
+        <span><b>{run.done}</b> / {run.total} archive pages ({Math.round((run.done / run.total) * 100)}%)</span>
+        {#if run.per_min}<span><b>{run.per_min}</b> pages/min</span>{/if}
+        {#if run.eta_min != null}<span>~<b>{run.eta_min}</b> min left</span>{/if}
+        <span><b>{fmtInt(run.offers_read)}</b> offers read · <b>{fmtInt(run.observations)}</b> price points stored</span>
+        {#if run.unreadable}<span>{run.unreadable} unreadable</span>{/if}
+        {#if run.failed}<span>{run.failed} failed (retried next run)</span>{/if}
+      </div>
+      {#if run.next}
+        <div class="run-now">Now: fetching {run.next.month} · {PAGE_KIND[run.next.kind]} · <span class="mono">{shortUrl(run.next.url)}</span></div>
+      {/if}
+      {#if run.recent?.length}
+        <ul class="run-recent">
+          {#each run.recent as r}
+            <li class={r.status}>
+              <span class="st">{r.status === 'parsed' ? '✓' : r.status === 'unreadable' ? '–' : '✗'}</span>
+              {r.month} · {PAGE_KIND[r.kind]} · {r.status === 'parsed' ? `${r.offers} offer${r.offers === 1 ? '' : 's'}` : r.error || r.status}
+              <span class="muted">· {ago(r.fetched_at)}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  {/if}
+</div>
+
   {#if refCheck?.rows?.length}
-    <details class="ref">
+    <details class="ref card">
       <summary>Check against hand-collected reference: {refCheck.summary.match ?? 0} match · {refCheck.summary['price differs'] ?? 0} price differs · {refCheck.summary['not found'] ?? 0} not found</summary>
       <div class="scroll-x">
         <table class="data-table">
@@ -209,7 +272,6 @@
       </div>
     </details>
   {/if}
-</div>
 
 <style>
   .panel-title { font-size: 15px; margin: 0 0 10px; }
@@ -225,7 +287,23 @@
   .source { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
   .legend-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin: 0 4px 0 10px; vertical-align: -1px; }
   .legend-dot.hollow { background: transparent; border: 2px solid var(--muted); margin-left: 0; }
-  .ref { margin-top: 10px; font-size: 13px; }
+  .ref { font-size: 13px; }
+  .runbox { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-size: 13px; }
+  .run-head { display: flex; align-items: center; gap: 8px; }
+  .run-head .small { margin-left: auto; padding: 3px 10px; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .bar { height: 6px; border-radius: 3px; background: var(--border); margin: 7px 0; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
+  .run-grid { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); }
+  .run-grid b { color: var(--text); font-weight: 600; }
+  .run-now { margin-top: 5px; }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); }
+  .run-recent { list-style: none; margin: 5px 0 0; padding: 0; color: var(--muted); font-size: 12px; }
+  .run-recent .st { display: inline-block; width: 14px; }
+  .run-recent li.parsed .st { color: var(--accent); }
+  .run-recent li.failed .st { color: var(--bad); }
   .ref summary { cursor: pointer; color: var(--accent); }
   tr.price-differs td:last-child { color: var(--warn); }
   tr.not-found td:last-child { color: var(--muted); }

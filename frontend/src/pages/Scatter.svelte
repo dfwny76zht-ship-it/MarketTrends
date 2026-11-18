@@ -6,7 +6,7 @@
   import Chart from '../components/Chart.svelte';
 
   let points = $state([]);
-  let logScale = $state(true);
+  let logScale = $state(false);
   let error = $state('');
 
   async function load(params, level) {

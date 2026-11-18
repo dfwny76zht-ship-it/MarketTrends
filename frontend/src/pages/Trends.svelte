@@ -55,10 +55,10 @@
   const RANKS = [
     ['restocked', 'Most often restocked', (r) => `${r.events}× · ${r.shop_names}`],
     ['new', 'Newly appeared', (r) => r.shop_names],
-    ['price_down', 'Price fallen', (r) => `${fmtEur(r.from)} → ${fmtEur(r.to)} (${r.change_pct}%)`],
-    ['price_up', 'Price risen', (r) => `${fmtEur(r.from)} → ${fmtEur(r.to)} (+${r.change_pct}%)`],
+    ['price_down', 'Price fallen', (r) => `${fmtEur(r.from)} → ${fmtEur(r.to)} (${Math.round(r.change_pct)}%)`],
+    ['price_up', 'Price risen', (r) => `${fmtEur(r.from)} → ${fmtEur(r.to)} (+${Math.round(r.change_pct)}%)`],
     ['gone', 'Disappeared', (r) => r.shop_names],
-    ['widest', 'Offered by most shops', (r) => `${r.shops} shops · ${r.shop_names}`],
+    ['widest', 'Offered by most shops', (r) => `${r.shops} shop${r.shops === 1 ? '' : 's'}`],
   ];
 </script>
 
@@ -70,13 +70,17 @@
 
 {#if rk}
   <div class="ranks">
-    {#each RANKS as [k, title, detail]}
+    {#each [...RANKS].sort((a, b) => rk[b[0]].length - rk[a[0]].length) as [k, title, detail] (k)}
       <div class="card">
         <h2>{title}</h2>
         {#if rk[k].length}
           <ol>
             {#each rk[k] as r (r.key)}
-              <li><a href="#/taxon/{r.key}"><em>{r.name}</em></a> <span class="muted">{detail(r)}</span></li>
+              {#if k === 'price_down' || k === 'price_up' || k === 'widest'}
+                <li><span class="one"><a href="#/taxon/{r.key}"><em>{r.name}</em></a><span class="muted">{detail(r)}</span></span></li>
+              {:else}
+                <li><a href="#/taxon/{r.key}"><em>{r.name}</em></a> <span class="muted">{detail(r)}</span></li>
+              {/if}
             {/each}
           </ol>
         {:else}
@@ -148,6 +152,10 @@
   h1 { font-size: 20px; margin: 0 0 12px; }
   .ranks { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-bottom: 4px; }
   .ranks .card { margin-bottom: 0; }
+  /* One line per item: the name shortens, the numbers stay whole */
+  .one { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+  .one a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .one .muted { flex: none; white-space: nowrap; font-size: 13px; }
   ol { margin: 0; padding-left: 20px; font-size: 14px; display: grid; gap: 3px; }
   ol a { color: var(--text); text-decoration: none; }
   ol a:hover { color: var(--accent); text-decoration: underline; }
