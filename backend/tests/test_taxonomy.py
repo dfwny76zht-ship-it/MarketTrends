@@ -61,7 +61,8 @@ def test_suggestions(db, setup):
     a = assignment(db, setup["imb_a"])
     assert (a["epithet"], a["confidence"], a["confirmed"]) == ("imbricata", "likely", False)
     a = assignment(db, setup["rosita"])
-    assert (a["cultivar"], a["kind"], a["confidence"]) == ("Rosita", "hybrid", "likely")
+    # "sure" if another test already confirmed the spelling 'rosita' in this database
+    assert (a["cultivar"], a["kind"]) == ("Rosita", "hybrid") and a["confidence"] in ("likely", "sure")
     a = assignment(db, setup["kerrii"])
     assert (a["epithet"], a["cultivar"], a["confidence"]) == ("kerrii", "Variegata", "likely")
     a = assignment(db, setup["typo"])

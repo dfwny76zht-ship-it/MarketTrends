@@ -4,15 +4,28 @@
   import Shops from './pages/Shops.svelte';
   import Assign from './pages/Assign.svelte';
   import Species from './pages/Species.svelte';
+  import Overview from './pages/Overview.svelte';
+  import Taxon from './pages/Taxon.svelte';
+  import Events from './pages/Events.svelte';
+  import Watchlist from './pages/Watchlist.svelte';
+  import Scatter from './pages/Scatter.svelte';
+  import ChartWindow from './components/ChartWindow.svelte';
+  import { chartWin } from './lib/state.svelte.js';
 
   let user = $state(null);
   let ready = $state(false);
   let page = $state(pageFromHash());
+  let taxonKey = $state(keyFromHash());
+
+  function keyFromHash() {
+    const m = location.hash.match(/^#\/taxon\/([sc]\d+)/);
+    return m ? m[1] : null;
+  }
   let openCount = $state(null);
 
   function pageFromHash() {
     const p = location.hash.replace(/^#\/?/, '').split('/')[0];
-    return ['shops', 'assign', 'species'].includes(p) ? p : 'shops';
+    return ['overview', 'taxon', 'events', 'scatter', 'watchlist', 'shops', 'assign', 'species'].includes(p) ? p : 'overview';
   }
 
   api('/me', { allow401: true })
@@ -22,7 +35,10 @@
 
   $effect(() => {
     const onLogout = () => (user = null);
-    const onHash = () => (page = pageFromHash());
+    const onHash = () => {
+      page = pageFromHash();
+      taxonKey = keyFromHash();
+    };
     window.addEventListener('mt-logout', onLogout);
     window.addEventListener('hashchange', onHash);
     return () => {
@@ -57,6 +73,11 @@
     <header>
       <strong>Market Trends</strong>
       <nav>
+        <a href="#/overview" class:active={page === 'overview' || page === 'taxon'}>Overview</a>
+        <a href="#/events" class:active={page === 'events'}>Events</a>
+        <a href="#/scatter" class:active={page === 'scatter'}>Price vs. stock</a>
+        <a href="#/watchlist" class:active={page === 'watchlist'}>Watchlist</a>
+        <span class="sep"></span>
         <a href="#/shops" class:active={page === 'shops'}>Shops</a>
         <a href="#/assign" class:active={page === 'assign'}>
           To assign{#if openCount}<span class="count">{openCount}</span>{/if}
@@ -65,8 +86,18 @@
       </nav>
       <button onclick={logout}>Log out</button>
     </header>
-    <main>
-      {#if page === 'shops'}
+    <main style={chartWin.open ? `padding-bottom: ${(chartWin.max ? 0 : chartWin.height) + 24}px` : 'padding-bottom: 60px'}>
+      {#if page === 'overview'}
+        <Overview />
+      {:else if page === 'taxon' && taxonKey}
+        {#key taxonKey}<Taxon key={taxonKey} />{/key}
+      {:else if page === 'events'}
+        <Events />
+      {:else if page === 'scatter'}
+        <Scatter />
+      {:else if page === 'watchlist'}
+        <Watchlist />
+      {:else if page === 'shops'}
         <Shops />
       {:else if page === 'assign'}
         <Assign onchange={refreshCount} />
@@ -74,6 +105,7 @@
         <Species />
       {/if}
     </main>
+    <ChartWindow />
   {/if}
 {/if}
 
@@ -91,6 +123,7 @@
   nav a { color: var(--muted); text-decoration: none; }
   nav a:hover { color: var(--text); }
   nav a.active { color: var(--accent); font-weight: 600; }
+  .sep { width: 1px; background: var(--border); }
   .count {
     margin-left: 6px;
     background: var(--warn-bg);

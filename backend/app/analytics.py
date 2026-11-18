@@ -159,7 +159,8 @@ def taxa(days: int = 28, level: str = "species", shops: list[int] | None = Query
         ).fetchall()
         ef, ep = _event_filters(days, shops)
         ev = conn.execute(
-            f"SELECT {key} AS key, e.kind, count(*) AS n {EVENTS_BASE} AND a.listing_id IS NOT NULL {ef} GROUP BY 1, 2",
+            f"SELECT {key} AS key, e.kind, (e.happened_at AT TIME ZONE 'Europe/Berlin')::date AS day, count(*) AS n"
+            f" {EVENTS_BASE} AND a.listing_id IS NOT NULL {ef} GROUP BY 1, 2, 3",
             ep,
         ).fetchall()
         watched = {
@@ -171,15 +172,18 @@ def taxa(days: int = 28, level: str = "species", shops: list[int] | None = Query
         t = out.setdefault(r["key"], {"key": r["key"], "name": r["name"], "series": []})
         t["series"].append({"day": str(r["day"]), "price": _num(r["price"]), "shops": r["shops"],
                             "offers": r["offers"], "quantity": r["quantity"], "in_stock_shops": r["in_stock_shops"]})
-    events: dict[str, dict] = defaultdict(dict)
+    events: dict[str, dict] = defaultdict(lambda: defaultdict(int))
+    events_daily: dict[str, dict] = defaultdict(lambda: defaultdict(int))
     for e in ev:
-        events[e["key"]][e["kind"]] = e["n"]
+        events[e["key"]][e["kind"]] += e["n"]
+        events_daily[e["key"]][str(e["day"])] += e["n"]
     result = []
     for t in out.values():
         last = t["series"][-1]
         t.update(
             price=last["price"], shops=last["shops"], offers=last["offers"], quantity=last["quantity"],
-            in_stock_shops=last["in_stock_shops"], last_day=last["day"], events=events.get(t["key"], {}),
+            in_stock_shops=last["in_stock_shops"], last_day=last["day"], events=dict(events.get(t["key"], {})),
+            events_daily=dict(events_daily.get(t["key"], {})),
             watched=t["key"] in watched,
         )
         t["event_total"] = sum(t["events"].values())

@@ -231,6 +231,7 @@
     <aside>
       <div class="head">
         <h2><em>{title}</em></h2>
+        <a href="#/taxon/{sel.type === 'species' ? 's' : 'c'}{sel.id}">Analysis</a>
         <button onclick={() => (location.hash = '#/species')} aria-label="Close">✕</button>
       </div>
       {#if msg}<p class="ok">{msg}</p>{/if}
@@ -363,7 +364,8 @@
     padding: 16px; align-self: start; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto;
   }
   @media (max-width: 1100px) { aside { position: static; max-height: none; } }
-  .head { display: flex; justify-content: space-between; gap: 8px; }
+  .head { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
+  .head a { margin-left: auto; color: var(--accent); font-size: 14px; }
   .head h2 { margin: 0 0 8px; font-size: 18px; }
   label { display: grid; gap: 3px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
   label :global(input), label :global(select), label :global(textarea) { color: var(--text); font-size: 15px; }
