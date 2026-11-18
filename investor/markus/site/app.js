@@ -336,13 +336,6 @@
     zählt dieser Vergleich: ${bpNames.join(' und ')} kosten bei FlorAccess ${eur(bp[0]?.net)} im 9-cm-Topf, also weniger als
     der Händlerpreis von 8 € im Businessplan (Kap. 6.4). Im Endkundengeschäft gelten andere Preise; dort verkaufen sich auch Arten,
     die FlorAccess günstiger hat: ${ex.map((p) => `<em>${esc(p.plant)}</em> ${eur(p.f.net)} bei FlorAccess, ${eur(p.b.price)} bei Ben's Jungle`).join('; ')}.`;
-  $('compare-sum').textContent = `Alle ${pairs.length} Arten und Sorten, die beide Shops führen`;
-  $('compare-table').innerHTML = `<tr><th>Art / Sorte</th><th class="n">FlorAccess netto</th><th>Topf / Höhe</th>
-      <th class="n">Ben's Jungle inkl. MwSt.</th><th>Größe</th><th class="n">Faktor (netto)</th></tr>` +
-    pairs.map((p) => `<tr class="${ex.includes(p) ? 'hl' : ''}"><td><em>${esc(p.plant)}</em></td><td class="n">${eur(p.f.net)}</td>
-      <td>${esc(p.f.pot ?? '')} / ${esc(p.f.height ?? '')}</td><td class="n">${eur(p.b.price)}</td>
-      <td>${p.b.size !== 'unknown' ? esc(p.b.size) : ''}</td><td class="n">${p.factor.toFixed(1).replace('.', ',')}×</td></tr>`).join('') +
-    `<tr><td colspan="6" class="note">Je Shop das günstigste Angebot. Die Größen sind nicht immer gleich; Faktor = Ben's Jungle netto ÷ FlorAccess netto.</td></tr>`;
 
   // ---------- origin ----------
   const O = data.origin;
@@ -392,7 +385,6 @@
   const sw = $('retail');
   const apply = () => {
     document.body.classList.toggle('retail', sw.checked);
-    if (sw.checked) $('compare').open = true;
     setTimeout(() => Object.values(charts).forEach((c) => { c.chart.resize(); c.draw(); }), 0);
   };
   sw.onchange = apply;
