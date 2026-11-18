@@ -1,0 +1,17 @@
+[
+  {"lims": "Hoya bella variegata", "species": "bella", "cultivar": "Variegata", "kind": "form"},
+  {"lims": "Hoya carnosa", "species": "carnosa"},
+  {"lims": "Hoya cumingiana", "species": "cumingiana"},
+  {"lims": "Hoya Elephant", "cultivar": "Elephant", "kind": "hybrid", "note": "From LIMS name 'Hoya Elephant'; species unknown."},
+  {"lims": "Hoya heuschkeliana", "species": "heuschkeliana"},
+  {"lims": "Hoya kentiana variegata", "species": "kentiana", "cultivar": "Variegata", "kind": "form"},
+  {"lims": "Hoya kerrii", "species": "kerrii"},
+  {"lims": "Hoya kerrii variegata", "species": "kerrii", "cultivar": "Variegata", "kind": "form"},
+  {"lims": "Hoya Kloppenburgiix", "species": "kloppenburgii", "note": "LIMS spelling 'Kloppenburgiix' read as kloppenburgii."},
+  {"lims": "Hoya linearis", "species": "linearis"},
+  {"lims": "Hoya patcharawalai 023 / Icensis", "cultivar": "Patcharawalai 023 / Icensis", "kind": "hybrid", "note": "LIMS comment: cultivar, unknown origin, possibly hybrid."},
+  {"lims": "Hoya rosita", "cultivar": "Rosita", "kind": "hybrid"},
+  {"lims": "Hoya serpens", "species": "serpens"},
+  {"lims": "Hoya shepherdii", "species": "shepherdii"},
+  {"lims": "Hoya wayetii", "species": "wayetii"}
+]

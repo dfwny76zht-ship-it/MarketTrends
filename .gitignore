@@ -5,7 +5,7 @@ __pycache__/
 *.pyc
 .venv/
 node_modules/
-data/
+/data/
 backups/
 .DS_Store
 node_modules/
