@@ -30,6 +30,9 @@
   });
 
   const shopIds = $derived(meta.shops.map((s) => s.id));
+  let photoIdx = $state(0);
+  // Current offers first, so the photo shows what is on sale now.
+  const photos = $derived((d?.offers ?? []).filter((o) => o.photo).sort((a, b) => (a.gone_since ? 1 : 0) - (b.gone_since ? 1 : 0)));
   const days = $derived([...new Set((d?.series ?? []).flatMap((s) => s.points.map((p) => p.day)))].sort());
   const hasQty = $derived((d?.series ?? []).some((s) => s.points.some((p) => p.quantity != null)));
   const last = $derived(d?.overall?.at(-1));
@@ -149,11 +152,40 @@
   {/if}
   <FilterBar size types={false} />
 
-  <div class="tiles">
-    <div class="tile"><div class="label">Shops offering</div><div class="value">{last?.shops ?? '–'}</div></div>
-    <div class="tile"><div class="label">Median price (net)</div><div class="value">{fmtEur(last?.price)}</div></div>
-    {#if hasQty}<div class="tile"><div class="label">Stock</div><div class="value">{fmtInt(stockNow)}</div></div>{/if}
-    <div class="tile"><div class="label">Events</div><div class="value">{d.events.length}</div></div>
+  <div class="top" class:with-photo={photos.length}>
+    <div class="tiles two">
+      <div class="tile"><div class="label">Shops offering</div><div class="value">{last?.shops ?? '–'}</div></div>
+      <div class="tile"><div class="label">Median price (net)</div><div class="value">{fmtEur(last?.price)}</div></div>
+      {#if hasQty}<div class="tile"><div class="label">Stock</div><div class="value">{fmtInt(stockNow)}</div></div>{/if}
+      <div class="tile"><div class="label">Events</div><div class="value">{d.events.length}</div></div>
+    </div>
+    {#if photos.length}
+      {@const cur = photos[Math.min(photoIdx, photos.length - 1)]}
+      <div class="photo">
+        <a href="/api/images/{cur.id}?full=1" target="_blank" rel="noopener">
+          <img src="/api/images/{cur.id}?full=1" alt={cur.name} />
+        </a>
+        <div class="caption">
+          <span>{cur.shop} · {cur.name}</span>
+          {#if photos.length > 1}
+            <span class="nav">
+              <button class="icon-btn" aria-label="Previous photo" onclick={() => (photoIdx = (photoIdx - 1 + photos.length) % photos.length)}>‹</button>
+              {Math.min(photoIdx, photos.length - 1) + 1} / {photos.length}
+              <button class="icon-btn" aria-label="Next photo" onclick={() => (photoIdx = (photoIdx + 1) % photos.length)}>›</button>
+            </span>
+          {/if}
+        </div>
+        {#if photos.length > 1}
+          <div class="strip">
+            {#each photos as ph, i (ph.id)}
+              <button class:on={i === photoIdx} aria-label="Photo {i + 1}" onclick={() => (photoIdx = i)}>
+                <img src="/api/images/{ph.id}" alt="" loading="lazy" />
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   {#if d.series.length}
@@ -292,4 +324,17 @@
   .memberships select { width: auto; color: var(--text); }
   .pic { width: 56px; padding-right: 8px; }
   .pic img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; display: block; background: var(--surface-2); }
+  .top { margin-bottom: 16px; }
+  .top.with-photo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 380px); gap: 12px; align-items: start; }
+  .top .tiles { margin-bottom: 0; }
+  .top.with-photo .tiles.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .photo { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
+  .photo > a img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--surface-2); }
+  .photo .caption { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .photo .nav { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .strip { display: flex; gap: 6px; overflow-x: auto; margin-top: 6px; }
+  .strip button { padding: 0; border: 2px solid transparent; border-radius: 6px; background: none; flex: none; }
+  .strip button.on { border-color: var(--accent); }
+  .strip img { display: block; width: 44px; height: 44px; object-fit: cover; border-radius: 4px; }
+  @media (max-width: 760px) { .top.with-photo { grid-template-columns: 1fr; } }
 </style>
