@@ -137,3 +137,14 @@ def test_challenge_pages_are_recognised():
     assert is_challenge(b"<html><title>uhlig-kakteen.de</title><body>Please enable JavaScript to continue.</body></html>")
     assert is_challenge(b"<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>")
     assert not is_challenge(gzip.decompress((FIX / "bens_jungle_hoya_p1.html.gz").read_bytes()))
+
+
+def test_floraccess_product_without_machine_readable_block():
+    tile = {"id": "119221", "path": "/en/product/119221/x/", "name": "Hoya carnosa 'Compacta Mauna Loa'",
+            "price": "€6.03", "pot": "6 cm", "height": "8 cm", "image": None}
+    offer = floraccess.parse_product(load("floraccess_product_119221_nold.html.gz"), tile, "https://www.floraccess.com")
+    assert offer.quantity == 100
+    assert offer.availability == "available"
+    assert offer.price == Decimal("6.03")
+    assert {"unit": "layer", "layers": 1, "min_qty": 36, "price": "6.03"} in offer.tier_prices
+    assert offer.raw["from"] == "page text"

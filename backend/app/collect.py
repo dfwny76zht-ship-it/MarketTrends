@@ -79,9 +79,9 @@ def _eur_net(price: Decimal | None, currency: str | None, basis: str | None, vat
     return value.quantize(Decimal("0.0001"))
 
 
-def _store(shop: dict, run_id: int, offers: list[Offer], complete: bool) -> int:
+def _store(shop: dict, run_id: int, offers: list[Offer], complete: bool, now: datetime | None = None) -> int:
     """Writes listings, observations and events. Returns the number of events."""
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     basis = shop["price_basis"] or "gross"
     events = 0
     seen: list[int] = []
@@ -288,3 +288,46 @@ def collect_in_background(shop_id: int) -> None:
             collect_one(shop_id)
 
     threading.Thread(target=work, daemon=True).start()
+
+
+def reparse_run(run_id: int) -> str:
+    """Parses the raw pages stored by an earlier run again (no requests to the shop) and stores the result
+    under that run, if it hasn't been stored yet."""
+    import gzip
+    from pathlib import Path
+
+    from . import config
+
+    with pool.connection() as conn:
+        run = conn.execute("SELECT * FROM runs WHERE id = %s AND kind = 'collect'", (run_id,)).fetchone()
+        if not run:
+            return "run not found"
+        if run["result"] == "ok":
+            return "run already stored"
+        shop = conn.execute("SELECT * FROM shops WHERE id = %s", (run["shop_id"],)).fetchone()
+        pages = {
+            r["url"]: r["path"]
+            for r in conn.execute(
+                "SELECT DISTINCT ON (url) url, path FROM snapshots WHERE run_id = %s ORDER BY url, id DESC", (run_id,)
+            )
+        }
+
+    def fetch(url: str) -> str:
+        if url not in pages:
+            raise FetchError(f"{url}: not stored in run {run_id}")
+        return gzip.decompress((Path(config.SNAPSHOT_DIR) / pages[url]).read_bytes()).decode("utf-8", "replace")
+
+    adapter = REGISTRY[shop["adapter"]](shop["adapter_config"] or {})
+    result = adapter.collect(fetch)
+    n = len({o.item_key for o in result.offers})
+    problem = _health_problem(shop["id"], n, len(result.errors))
+    details = dict(run["details"] or {}, reparsed=f"{adapter.key} v{adapter.version}", errors=result.errors[:20],
+                   complete=result.complete)
+    if problem:
+        _finish(run_id, "broken", problem, offers=n, pages=run["pages"], details=details)
+        return f"still broken: {problem}"
+    events = _store(shop, run_id, result.offers, result.complete, now=run["started_at"])
+    taxonomy.match_pending(shop["id"])
+    _finish(run_id, "ok", "; ".join(result.errors[:3]) or None, offers=n, events=events, pages=run["pages"],
+            details=details)
+    return f"stored {n} offers, {events} events"

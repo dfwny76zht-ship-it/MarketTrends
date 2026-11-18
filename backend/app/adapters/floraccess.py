@@ -25,6 +25,7 @@ LAYER_RE = re.compile(r"(\d+) layers? / (\d+) products - €\s?([\d.,]+)")
 TRAY_PRICE_RE = re.compile(r"Order per tray.*?€\s?([\d.,]+) per product")
 TRAY_QTY_RE = re.compile(r"Products per tray (\d+)")
 AVAILABLE_RE = re.compile(r"Products available (\d+) products")
+DISCOUNT_RE = re.compile(r"(\d+)x (\d+) layers? €\s?([\d.,]+)")
 
 
 class FlorAccessAdapter(Adapter):
@@ -130,12 +131,14 @@ def parse_product(html: str, tile: dict, base: str) -> Offer:
         if isinstance(data, dict) and data.get("@type") == "Product":
             product = data
             break
-    if not product:
-        raise ValueError("no product data on page")
-
     for node in tree.css("script, style"):
         node.decompose()
     text = clean(tree.body.text(separator=" ")) if tree.body else ""
+    if not product:
+        # Some pages carry no machine-readable block; the same facts are in the visible text.
+        if not AVAILABLE_RE.search(text):
+            raise ValueError("no product data on page")
+        product = {}
 
     offers = product.get("offers") or {}
     quantity = (offers.get("inventoryLevel") or {}).get("value")
@@ -143,6 +146,8 @@ def parse_product(html: str, tile: dict, base: str) -> Offer:
         m = AVAILABLE_RE.search(text)
         quantity = int(m.group(1)) if m else None
     availability = availability_from_schema(offers.get("availability"))
+    if availability == "unknown" and quantity is not None:
+        availability = "available" if quantity > 0 else "sold_out"
     if quantity == 0:
         availability = "sold_out"
 
@@ -152,6 +157,13 @@ def parse_product(html: str, tile: dict, base: str) -> Offer:
         tiers.append({"unit": "tray", "min_qty": int(tray_qty.group(1)), "price": str(parse_price(tray_price.group(1)))})
     for layers, qty, price in LAYER_RE.findall(text):
         tiers.append({"unit": "layer", "layers": int(layers), "min_qty": int(qty), "price": str(parse_price(price))})
+    if not any(t["unit"] == "layer" for t in tiers):
+        seen = set()
+        for qty, layers, price in DISCOUNT_RE.findall(text):
+            if layers not in seen:
+                seen.add(layers)
+                tiers.append({"unit": "layer", "layers": int(layers), "min_qty": int(qty), "price": str(parse_price(price))})
+    layer_price = next((t["price"] for t in tiers if t["unit"] == "layer" and t["layers"] == 1), None)
 
     return Offer(
         item_key=tile["id"],
@@ -159,7 +171,7 @@ def parse_product(html: str, tile: dict, base: str) -> Offer:
         name=clean(product.get("name")) or tile["name"],
         url=base + tile["path"],
         image_url=product.get("image") or tile.get("image"),
-        price=parse_price(offers.get("price")) or parse_price(tile.get("price")),
+        price=parse_price(offers.get("price")) or parse_price(layer_price) or parse_price(tile.get("price")),
         currency=offers.get("priceCurrency") or "EUR",
         tier_prices=tiers or None,
         availability_text=f"{quantity} available" if quantity is not None else None,
@@ -169,6 +181,7 @@ def parse_product(html: str, tile: dict, base: str) -> Offer:
         plant_size=tile.get("height"),
         raw={
             "schema_availability": offers.get("availability"),
+            "from": "page data" if offers else "page text",
             "price_valid_until": offers.get("priceValidUntil"),
             "tile_price": tile.get("price"),
         },
