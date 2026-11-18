@@ -23,6 +23,7 @@ with pool.connection() as conn:
     expr = flt.group_expr(grouping, "o.price_eur_net", split_subgroups=True)
     rows = conn.execute(
         f"SELECT l.id, sh.name AS shop, l.name, l.url, {_key('cultivar')} AS plant_key, {TAXON_NAME} AS plant,"
+        f" {_key('species')} AS species_key,"
         f" {flt.TYPE_SQL} AS type, ({expr})::int AS grp,"
         " o.price, o.currency, o.price_basis, o.price_eur_net, o.quantity, o.availability, o.size_class,"
         " o.pot_size, o.plant_size"
@@ -43,7 +44,7 @@ out = {
     "groups": [{"id": k, **v} for k, v in groups.items()],
     "offers": [
         {
-            "shop": r["shop"], "name": r["name"], "url": r["url"], "plant": r["plant"], "plant_key": r["plant_key"],
+            "shop": r["shop"], "name": r["name"], "url": r["url"], "plant": r["plant"], "plant_key": r["plant_key"], "species_key": r["species_key"],
             "type": r["type"], "group": r["grp"], "price": num(r["price"]), "currency": r["currency"],
             "basis": r["price_basis"], "net": num(r["price_eur_net"]), "stock": r["quantity"],
             "availability": r["availability"], "size": r["size_class"], "pot": r["pot_size"], "height": r["plant_size"],

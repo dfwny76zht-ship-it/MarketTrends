@@ -10,3 +10,5 @@ backups/
 .DS_Store
 node_modules/
 dist/
+
+investor/markus/site/data.json

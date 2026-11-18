@@ -1,0 +1,382 @@
+[
+ {
+  "name": "Hoya 'Lai Chau'",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Lai Chau (Vietnam)",
+  "net": 14.66,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya 'Timor'",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Timor",
+  "net": 6.22,
+  "pot": "10,5",
+  "height": "15",
+  "line": "B"
+ },
+ {
+  "name": "Hoya callistophylla 'KAL 16'",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Sammelnummer KAL 16",
+  "net": 4.43,
+  "pot": "9",
+  "height": "5",
+  "line": null
+ },
+ {
+  "name": "Hoya callistophylla 'KAL 16'",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Sammelnummer KAL 16",
+  "net": 7.69,
+  "pot": "12",
+  "height": "10",
+  "line": null
+ },
+ {
+  "name": "Hoya finlaysonii 'Sukirin'",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Sukhirin (Thailand)",
+  "net": 14.66,
+  "pot": "10,5",
+  "height": "15",
+  "line": "B"
+ },
+ {
+  "name": "Hoya lacunosa sp Laos",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Laos",
+  "net": 6.03,
+  "pot": "6",
+  "height": "8",
+  "line": "D"
+ },
+ {
+  "name": "Hoya parviflora EPC341",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Sammelnummer EPC341, laut Benchmark von Elstgeest (NL)",
+  "net": 15.84,
+  "pot": "12",
+  "height": "15",
+  "line": "C"
+ },
+ {
+  "name": "Hoya sp Cianjur",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Cianjur (Java)",
+  "net": 8.99,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya sp Loei",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Loei (Thailand)",
+  "net": 6.12,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya Sp Mini Coin Sp Kalimantan",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Kalimantan (Borneo)",
+  "net": 6.12,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya Sp Padang Sidempuan",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Padang Sidempuan (Sumatra)",
+  "net": 18.23,
+  "pot": "10,5",
+  "height": "15",
+  "line": "B"
+ },
+ {
+  "name": "Hoya verticillata 'Nganjuk Splash'",
+  "import": "wahrscheinlich",
+  "wild": "nicht auszuschließen",
+  "hint": "Fundort Nganjuk (Java)",
+  "net": 6.12,
+  "pot": "10,5",
+  "height": "15",
+  "line": "B"
+ },
+ {
+  "name": "Hoya 'Rangsan'",
+  "import": "wahrscheinlich",
+  "wild": "praktisch ausgeschlossen",
+  "hint": "Thailändischer Name",
+  "net": 3.45,
+  "pot": "9",
+  "height": "2,5",
+  "line": null
+ },
+ {
+  "name": "Hoya 'Rangsan'",
+  "import": "wahrscheinlich",
+  "wild": "praktisch ausgeschlossen",
+  "hint": "Thailändischer Name",
+  "net": 4.45,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya diversifolia 'Maharani'",
+  "import": "wahrscheinlich",
+  "wild": "praktisch ausgeschlossen",
+  "hint": "Indonesischer Handelsname",
+  "net": 21.51,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya latifolia 'Rimba Perak'",
+  "import": "wahrscheinlich",
+  "wild": "praktisch ausgeschlossen",
+  "hint": "Malaiisch-indonesischer Handelsname",
+  "net": 14.66,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya burtoniae",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 9.49,
+  "pot": "14",
+  "height": "25",
+  "line": null
+ },
+ {
+  "name": "Hoya callistophylla",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 20.61,
+  "pot": "12",
+  "height": "15",
+  "line": "C"
+ },
+ {
+  "name": "Hoya caudata",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 18.23,
+  "pot": "10,5",
+  "height": "15",
+  "line": "B"
+ },
+ {
+  "name": "Hoya clemensiorum",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 19.95,
+  "pot": "12",
+  "height": "15",
+  "line": "C"
+ },
+ {
+  "name": "Hoya crassipetiolata",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 4.43,
+  "pot": "9",
+  "height": "15",
+  "line": null
+ },
+ {
+  "name": "Hoya deykeae",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 21.51,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya fitchii",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 4.43,
+  "pot": "9",
+  "height": "20",
+  "line": null
+ },
+ {
+  "name": "Hoya fitchii",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 7.61,
+  "pot": "12",
+  "height": "7,5",
+  "line": null
+ },
+ {
+  "name": "Hoya fitchii",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 15.84,
+  "pot": "12",
+  "height": "15",
+  "line": "C"
+ },
+ {
+  "name": "Hoya gracilis",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 7.84,
+  "pot": "14",
+  "height": "5",
+  "line": null
+ },
+ {
+  "name": "Hoya imbricata",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 9.69,
+  "pot": "14",
+  "height": "33–43",
+  "line": null
+ },
+ {
+  "name": "Hoya mirabilis",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 6.03,
+  "pot": "6",
+  "height": "8",
+  "line": "D"
+ },
+ {
+  "name": "Hoya nummularioides",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 4.59,
+  "pot": "6",
+  "height": "8",
+  "line": "D"
+ },
+ {
+  "name": "Hoya pandurata",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 26.7,
+  "pot": "14",
+  "height": "25–35",
+  "line": null
+ },
+ {
+  "name": "Hoya polyneura",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 6.12,
+  "pot": "8",
+  "height": "10",
+  "line": "A"
+ },
+ {
+  "name": "Hoya polyneura",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 18.67,
+  "pot": "14",
+  "height": "25–35",
+  "line": null
+ },
+ {
+  "name": "Hoya quinquenervia",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 7.47,
+  "pot": "9",
+  "height": "2,5",
+  "line": null
+ },
+ {
+  "name": "Hoya soligamiana",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 4.43,
+  "pot": "9",
+  "height": "20",
+  "line": null
+ },
+ {
+  "name": "Hoya thomsonii",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 16.35,
+  "pot": "12",
+  "height": "15",
+  "line": "C"
+ },
+ {
+  "name": "Hoya vangviengiensis",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 4.43,
+  "pot": "9",
+  "height": "10",
+  "line": null
+ },
+ {
+  "name": "Hoya wibergiae",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 4.43,
+  "pot": "9",
+  "height": "90–110",
+  "line": null
+ },
+ {
+  "name": "Hoya wibergiae",
+  "import": "möglich",
+  "wild": "nicht auszuschließen",
+  "hint": "Reinart ohne Herkunftsangabe",
+  "net": 6.22,
+  "pot": "10,5",
+  "height": "15",
+  "line": "B"
+ }
+]

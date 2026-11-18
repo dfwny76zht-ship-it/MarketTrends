@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>FlorAccess im Kontext · GeniScent</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header class="head">
+    <div class="kicker">GeniScent · Marktanalyse Hoya</div>
+    <h1>FlorAccess im Kontext</h1>
+    <div class="meta">
+      <span>Stand 18.11.2026 · eigene Marktbeobachtung</span>
+      <label class="switch"><input type="checkbox" id="retail"> Einzelhandel einblenden (Ben's Jungle)</label>
+      <button class="print" onclick="window.print()">Drucken / PDF</button>
+    </div>
+  </header>
+
+  <p class="lead" id="lead"></p>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="figure">
+    <div class="fig-head">
+      <h2>Pflanzen und Lagerwert je Gruppe</h2>
+      <span class="hint">Segment oder Gruppe anklicken für die vollständige Liste</span>
+    </div>
+    <div class="donuts" id="donuts">
+      <div class="donut"><div class="dtitle">Pflanzen im Bestand</div><div class="chart" id="c-stock"></div></div>
+      <div class="donut"><div class="dtitle">Lagerwert (netto)</div><div class="chart" id="c-value"></div></div>
+      <div class="donut retail-only"><div class="dtitle">Ben's Jungle: Angebote</div><div class="chart" id="c-retail"></div></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <p class="caption" id="caption"></p>
+    <div class="grouplist" id="grouplist" hidden></div>
+  </section>
+
+  <section class="cards">
+    <article class="card">
+      <h3>Kerrii: meist Einzelblätter</h3>
+      <p id="kerrii"></p>
+    </article>
+    <article class="card">
+      <h3>Carnosa: Masse statt Vielfalt</h3>
+      <p id="carnosa"></p>
+    </article>
+    <article class="card">
+      <h3>Medianpreis je Gruppe</h3>
+      <table class="mini" id="medians"></table>
+    </article>
+  </section>
+
+  <section class="block">
+    <h2>Großhandel und Endkundenpreise</h2>
+    <p id="prices"></p>
+    <details id="compare">
+      <summary id="compare-sum"></summary>
+      <div class="scroll"><table class="list" id="compare-table"></table></div>
+    </details>
+  </section>
+
+  <section class="block">
+    <h2>Import und Wildentnahme</h2>
+    <p id="origin"></p>
+    <details>
+      <summary id="origin-sum"></summary>
+      <div class="filters" id="origin-filters"></div>
+      <div class="scroll"><table class="list sortable" id="origin-table"></table></div>
+      <p class="note">Linie = gleiche Topfgröße und Höhe mit wiederkehrenden Preisen, vermutlich dieselbe Quelle.
+        Belegen lässt sich die Herkunft nur über Feld D des Pflanzenpasses (Ursprungsland).</p>
+    </details>
+  </section>
+
+  <section class="block conclusion">
+    <h2>Einordnung</h2>
+    <div class="spectrum">
+      <div><strong>Importeure (Südostasien, Pazifik)</strong><span>selten und gefragt, aber Luftfracht, Zoll,
+        Pflanzengesundheitszeugnis und hohe Ausfälle</span></div>
+      <div class="me"><strong>GeniScent</strong><span>seltene Arten aus Gewebekultur, lokal und rückverfolgbar</span></div>
+      <div><strong>FlorAccess</strong><span>verlässlich lieferbar, aber im Kern Carnosa und Kerrii</span></div>
+    </div>
+    <p id="geniscent" class="todo">[Was GeniScent daraus macht – Text folgt]</p>
+  </section>
+
+  <footer class="foot">
+    <p id="method"></p>
+    <p class="sources">Quellen:
+      <a href="https://www.floraccess.com/en/category/571/hoya/" rel="noopener noreferrer">FlorAccess, Kategorie Hoya</a> ·
+      <a href="https://bens-jungle.com/Hoya" rel="noopener noreferrer">Ben's Jungle, Hoya</a> ·
+      <a href="https://www.janeperrone.com/blog/2022/3/11/the-problem-with-the-sweetheart-plant-hoya-kerrii" rel="noopener noreferrer">Jane Perrone: The problem with the sweetheart plant</a> ·
+      <a href="https://www.teesside.bcss.org.uk/BCSS/GALLERY/PICTURES/HOYA/hoya_031.html" rel="noopener noreferrer">BCSS Teesside: Hoya kerrii</a> ·
+      Durchführungsverordnung (EU) 2019/2072 · Businessplan GeniScent, November 2026</p>
+  </footer>
+</main>
+<script src="echarts.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
