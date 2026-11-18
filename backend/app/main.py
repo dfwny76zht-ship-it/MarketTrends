@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, collect, config, migrate, shops, taxa, taxonomy
+from . import analytics, auth, collect, config, migrate, shops, taxa, taxonomy
 from .db import pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -40,6 +40,7 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
 app.include_router(auth.router)
 app.include_router(shops.router)
 app.include_router(taxa.router)
+app.include_router(analytics.router)
 
 
 @app.get("/api/health")

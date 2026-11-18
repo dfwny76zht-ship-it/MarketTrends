@@ -254,6 +254,7 @@ def collect_one(shop_id: int) -> str | None:
 
 def nightly() -> None:
     """Every shop once: collection if it has a working adapter, otherwise just the robots.txt check."""
+    started = datetime.now(timezone.utc)
     with pool.connection() as conn:
         shops = conn.execute(
             "SELECT s.id, s.name, s.url, s.adapter, s.status,"
@@ -280,6 +281,16 @@ def nightly() -> None:
                 problems.append(problem)
     if problems:
         ntfy.send("Market Trends: night run", "\n".join(problems), tags=["warning"])
+    try:
+        from .analytics import watchlist_events_since
+
+        with pool.connection() as conn:
+            lines = watchlist_events_since(conn, started)
+        if lines:
+            more = f"\n… and {len(lines) - 15} more" if len(lines) > 15 else ""
+            ntfy.send("Market Trends: watchlist", "\n".join(lines[:15]) + more, tags=["seedling"])
+    except Exception:
+        log.exception("watchlist message failed")
 
 
 def collect_in_background(shop_id: int) -> None:
