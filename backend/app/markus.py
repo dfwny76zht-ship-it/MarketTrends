@@ -1,5 +1,6 @@
-"""Edit version of the investor page for Markus: same files, served behind the Market Trends login, with
-text overrides saved to texts/texts.json (nginx serves that file to Markus' page on :8446)."""
+"""Investor page for Markus, only behind the Market Trends login (Reports page): /reports/markus/ is the
+read-only view, /markus-edit/ the edit version that saves text overrides to texts/texts.json. The public
+:8446 site was closed on 19.11.2026."""
 
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from .auth import current_user
 router = APIRouter()
 SITE = Path(os.environ.get("MARKUS_DIR", "/markus"))
 TEXTS = SITE / "texts" / "texts.json"
-FILES = {"index.html", "app.js", "style.css", "echarts.min.js", "data.json", "texts/texts.json"}
+FILES = {"index.html", "app.js", "style.css", "echarts.min.js", "data.json", "history.json", "texts/texts.json"}
 ALLOWED = {"b", "strong", "em", "i", "br", "a", "span", "sup", "sub"}
 
 
@@ -77,6 +78,16 @@ def _read() -> dict:
 @router.get("/markus-edit")
 def edit_root():
     return RedirectResponse("/markus-edit/")
+
+
+@router.get("/reports/markus")
+def view_root():
+    return RedirectResponse("/reports/markus/")
+
+
+@router.get("/reports/markus/{path:path}")
+def view_file(path: str, request: Request):
+    return edit_file(path, request)
 
 
 @router.get("/markus-edit/{path:path}")

@@ -12,6 +12,7 @@
   import Trends from './pages/Trends.svelte';
   import Groupings from './pages/Groupings.svelte';
   import GroupingEditor from './pages/GroupingEditor.svelte';
+  import Reports from './pages/Reports.svelte';
   import ChartWindow from './components/ChartWindow.svelte';
   import GroupingPopup from './components/GroupingPopup.svelte';
   import { chartWin } from './lib/state.svelte.js';
@@ -35,7 +36,7 @@
 
   function pageFromHash() {
     const p = location.hash.replace(/^#\/?/, '').split('/')[0];
-    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'shops', 'assign', 'species', 'groupings'].includes(p) ? p : 'overview';
+    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'shops', 'assign', 'species', 'groupings', 'reports'].includes(p) ? p : 'overview';
   }
 
   api('/me', { allow401: true })
@@ -96,6 +97,7 @@
         </a>
         <a href="#/species" class:active={page === 'species'}>Species</a>
         <a href="#/groupings" class:active={page === 'groupings'}>Groupings</a>
+        <a href="#/reports" class:active={page === 'reports'}>Reports</a>
       </nav>
       <button onclick={logout}>Log out</button>
     </header>
@@ -118,6 +120,8 @@
         <Assign onchange={refreshCount} />
       {:else if page === 'species'}
         <Species />
+      {:else if page === 'reports'}
+        <Reports />
       {:else if page === 'groupings' && groupingId}
         {#key groupingId}<GroupingEditor id={groupingId} />{/key}
       {:else if page === 'groupings'}

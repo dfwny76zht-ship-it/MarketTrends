@@ -434,7 +434,7 @@
     bar.innerHTML = `<strong>Bearbeiten</strong><span id="eb-state">In einen Text klicken und ändern.</span>
       <button id="eb-reset" disabled>Text auf automatisch</button>
       <button id="eb-save" class="primary" disabled>Speichern</button>
-      <a href="https://geniscent.duckdns.org:8446/" target="_blank" rel="noopener">Markus-Ansicht</a>`;
+      <a href="/reports/markus/">Leseansicht</a> · <a href="/#/reports">Zurück zu Market Trends</a>`;
     document.body.prepend(bar);
     const state = $('eb-state');
     const update = () => {
