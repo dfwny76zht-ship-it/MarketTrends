@@ -90,9 +90,9 @@ SOURCES = {
                        "reader": floraccess_archive.parse_archived, "basis": "net"},
     "kakteen-haage.de": {"domain": "kakteen-haage.de", "filter": "original:.*[Hh]oya.*", "kind": _haage_kind,
                          "reader": haage_archive.parse_archived, "basis": "gross"},
-    "bens-jungle.com": {"domain": "bens-jungle.com", "filter": "original:.*[Hh]oya.*",
+    "bens-jungle.com": {"domain": "bens-jungle.com", "prefixes": ["bens-jungle.com/Hoya", "www.bens-jungle.com/Hoya"],
                         "kind": _jtl_kind(r"/Hoya(_\d+)?(_s\d+)?"), "reader": jtl_archive.parse_archived, "basis": "gross"},
-    "uhlig-kakteen.de": {"domain": "uhlig-kakteen.de", "filter": "original:.*[Hh]oya.*",
+    "uhlig-kakteen.de": {"domain": "uhlig-kakteen.de", "prefixes": ["uhlig-kakteen.de/Hoya", "www.uhlig-kakteen.de/Hoya"],
                          "kind": _jtl_kind(r"/Hoya-und-Dischidia(_\d+)?(_s\d+)?"), "reader": jtl_archive.parse_archived,
                          "basis": "gross"},
 }
@@ -119,11 +119,27 @@ def discover(shop_id: int) -> dict:
     if not shop:
         raise HTTPException(404, "Shop not found.")
     src = _source(shop)
+    queries = ([{"url": p, "matchType": "prefix"} for p in src["prefixes"]] if src.get("prefixes")
+               else [{"url": src["domain"], "matchType": "domain", "filter": src["filter"]}])
+    rows = []
     with _client() as c:
-        r = c.get(CDX, params={"url": src["domain"], "matchType": "domain", "from": FROM_YEAR, "filter": src["filter"],
-                               "fl": "timestamp,original,statuscode,mimetype", "output": "json"})
-        r.raise_for_status()
-        rows = r.json()[1:]
+        for q in queries:
+            # The index is often busy: a narrow prefix query plus a few patient retries.
+            for attempt in range(4):
+                try:
+                    r = c.get(CDX, params={**q, "from": FROM_YEAR, "fl": "timestamp,original,statuscode,mimetype",
+                                           "output": "json"}, timeout=180)
+                    if r.status_code == 503 and attempt < 3:
+                        time.sleep(30 * (attempt + 1))
+                        continue
+                    r.raise_for_status()
+                    break
+                except httpx.TimeoutException:
+                    if attempt == 3:
+                        raise
+                    time.sleep(30 * (attempt + 1))
+            rows += r.json()[1:] if r.text.strip() else []
+            time.sleep(GAP)
     best: dict[tuple, tuple] = {}
     for ts, url, status, mime in rows:
         if status != "200" or "html" not in mime:
