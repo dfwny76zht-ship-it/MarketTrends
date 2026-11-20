@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from psycopg.types.json import Jsonb
 
 from . import config, names, taxonomy
-from .adapters import floraccess_archive, haage_archive
+from .adapters import floraccess_archive, haage_archive, jtl_archive
 from .auth import current_user
 from .db import pool
 
@@ -59,12 +59,42 @@ def _haage_kind(url: str) -> tuple[str | None, str | None]:
     return "category", None
 
 
+def _jtl_kind(category_re: str):
+    """JTL shops: the Hoya category (with its page suffixes _1, _s2 …) and product pages named Hoya-…"""
+    def kind(url: str) -> tuple[str | None, str | None]:
+        path = re.sub(r"https?://(www\.)?[^/]+(:80|:443)?", "", url).split("?")[0].rstrip("/")
+        if re.fullmatch(category_re, path, re.I):
+            return "category", None
+        if re.fullmatch(r"/Hoya-[^/]+", path, re.I):
+            return "product", path.lower()
+        return None, None
+    return kind
+
+
+def _body_text(raw: bytes) -> str:
+    """Archive copies can come still gzip-compressed, and older JTL pages are ISO-8859-1."""
+    if raw[:2] == b"\x1f\x8b":
+        try:
+            raw = gzip.decompress(raw)
+        except OSError:
+            pass
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252", "replace")
+
+
 # Per shop: which archived addresses belong to the Hoya range, and how to read them.
 SOURCES = {
     "floraccess.com": {"domain": "floraccess.com", "filter": "original:.*[Hh]oya.*", "kind": _fa_kind,
                        "reader": floraccess_archive.parse_archived, "basis": "net"},
     "kakteen-haage.de": {"domain": "kakteen-haage.de", "filter": "original:.*[Hh]oya.*", "kind": _haage_kind,
                          "reader": haage_archive.parse_archived, "basis": "gross"},
+    "bens-jungle.com": {"domain": "bens-jungle.com", "filter": "original:.*[Hh]oya.*",
+                        "kind": _jtl_kind(r"/Hoya(_\d+)?(_s\d+)?"), "reader": jtl_archive.parse_archived, "basis": "gross"},
+    "uhlig-kakteen.de": {"domain": "uhlig-kakteen.de", "filter": "original:.*[Hh]oya.*",
+                         "kind": _jtl_kind(r"/Hoya-und-Dischidia(_\d+)?(_s\d+)?"), "reader": jtl_archive.parse_archived,
+                         "basis": "gross"},
 }
 
 
@@ -179,7 +209,8 @@ def _import(conn, shop_id: int, run_id: int, capture: dict, offers: list[dict], 
              o["price"] if basis == "net" else round(o["price"] / (1 + float(vat) / 100), 4),
              o["availability"], o.get("pot"), o.get("height"),
              Jsonb({"archive": capture["archive"], "archive_url": capture["archive_url"], "page": capture["kind"],
-                    "captured_at": capture["captured_at"].isoformat(), "note": o.get("note")}),
+                    "captured_at": capture["captured_at"].isoformat(), "note": o.get("note"),
+                    **{k: o[k] for k in ("ribbons", "sku", "delivery") if o.get(k)}}),
              names.size_class(o.get("pot"), o["name"]), o.get("grower")),
         )
         n += 1
@@ -254,7 +285,7 @@ def run_queue(shop_ids: list[int], limit: int | None = None) -> dict:
                                      (err or f"HTTP {r.status_code}", cap["id"]))
                     continue
                 snap = _store_snapshot(sid, run_ids[sid], archive_url, r.status_code, r.content)
-                offers = src["reader"](r.text, cap["url"], cap["kind"], cap["captured_at"])
+                offers = src["reader"](_body_text(r.content), cap["url"], cap["kind"], cap["captured_at"])
                 with pool.connection() as conn:
                     n = _import(conn, sid, run_ids[sid], dict(cap, archive="wayback", archive_url=archive_url), offers,
                                 src["basis"])
@@ -286,7 +317,7 @@ def reread(shop_id: int) -> dict:
             " WHERE c.shop_id = %s", (shop_id,)).fetchall()
     found = 0
     for cap in caps:
-        body = gzip.decompress((Path(config.SNAPSHOT_DIR) / cap["path"]).read_bytes()).decode("utf-8", "replace")
+        body = _body_text(gzip.decompress((Path(config.SNAPSHOT_DIR) / cap["path"]).read_bytes()))
         offers = src["reader"](body, cap["url"], cap["kind"], cap["captured_at"])
         with pool.connection() as conn:
             found += _import(conn, shop_id, cap["run_id"], dict(cap, archive="wayback"), offers, src["basis"])
