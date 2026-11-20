@@ -3,6 +3,7 @@
   import Login from './pages/Login.svelte';
   import Shops from './pages/Shops.svelte';
   import Collection from './pages/Collection.svelte';
+  import Demand from './pages/Demand.svelte';
   import Assign from './pages/Assign.svelte';
   import Species from './pages/Species.svelte';
   import Overview from './pages/Overview.svelte';
@@ -37,7 +38,7 @@
 
   function pageFromHash() {
     const p = location.hash.replace(/^#\/?/, '').split('/')[0];
-    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'shops', 'collection', 'assign', 'species', 'groupings', 'reports'].includes(p) ? p : 'overview';
+    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'demand', 'shops', 'collection', 'assign', 'species', 'groupings', 'reports'].includes(p) ? p : 'overview';
   }
 
   api('/me', { allow401: true })
@@ -91,6 +92,7 @@
         <a href="#/scatter" class:active={page === 'scatter'}>Price vs. stock</a>
         <a href="#/events" class:active={page === 'events'}>Events</a>
         <a href="#/watchlist" class:active={page === 'watchlist'}>Watchlist</a>
+        <a href="#/demand" class:active={page === 'demand'}>Demand</a>
         <span class="sep"></span>
         <a href="#/shops" class:active={page === 'shops'}>Shops</a>
         <a href="#/collection" class:active={page === 'collection'}>Collection</a>
@@ -120,6 +122,8 @@
         <Shops />
       {:else if page === 'collection'}
         <Collection />
+      {:else if page === 'demand'}
+        <Demand />
       {:else if page === 'assign'}
         <Assign onchange={refreshCount} />
       {:else if page === 'species'}

@@ -220,6 +220,24 @@ def collect_one(shop_id: int) -> str | None:
     return _conclude(shop, run_id, adapter, result, fetcher.requests, {"unchanged_pages": fetcher.unchanged})
 
 
+def _store_ranks(shop_id: int, run_id: int, ranks: dict, now: datetime | None = None) -> int:
+    """The shop's sort orders of this run (demand signal), one row per offer and list."""
+    now = now or datetime.now(timezone.utc)
+    n = 0
+    with pool.connection() as conn:
+        ids = {r["item_key"]: r["id"] for r in conn.execute(
+            "SELECT id, item_key FROM listings WHERE shop_id = %s", (shop_id,))}
+        for name, keys in (ranks or {}).items():
+            keys = [k for k in keys if k in ids]
+            for pos, k in enumerate(keys, 1):
+                conn.execute(
+                    "INSERT INTO listing_ranks (listing_id, run_id, observed_at, list, position, list_size)"
+                    " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                    (ids[k], run_id, now, name, pos, len(keys)))
+                n += 1
+    return n
+
+
 def _conclude(shop: dict, run_id: int, adapter, result, pages: int, extra: dict) -> str | None:
     """Shared end of a collection run (Hetzner or Pi): health check, store, species matching, finish."""
     shop_id, name = shop["id"], shop["name"]
@@ -242,6 +260,10 @@ def _conclude(shop: dict, run_id: int, adapter, result, pages: int, extra: dict)
         return f"{name}: adapter broken – {problem}"
 
     events = _store(shop, run_id, result.offers, result.complete)
+    try:
+        details["ranked"] = _store_ranks(shop_id, run_id, result.ranks)
+    except Exception:
+        log.exception("storing sort orders failed for %s", name)
     try:
         taxonomy.match_pending(shop_id)
     except Exception:
@@ -345,6 +367,7 @@ def reparse_run(run_id: int) -> str:
         _finish(run_id, "broken", problem, offers=n, pages=run["pages"], details=details)
         return f"still broken: {problem}"
     events = _store(shop, run_id, result.offers, result.complete, now=run["started_at"])
+    _store_ranks(shop["id"], run_id, result.ranks, now=run["started_at"])
     taxonomy.match_pending(shop["id"])
     _finish(run_id, "ok", "; ".join(result.errors[:3]) or None, offers=n, events=events, pages=run["pages"],
             details=details)

@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import analytics, archive, auth, collect, collection, collector, config, groupings, images, markus, migrate, shops, taxa, taxonomy, trends
+from . import analytics, archive, auth, collect, collection, collector, demand, config, groupings, images, markus, migrate, shops, taxa, taxonomy, trends
 from .db import pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -68,6 +68,7 @@ app.include_router(collector.router)
 app.include_router(markus.router)
 app.include_router(archive.router)
 app.include_router(collection.router)
+app.include_router(demand.router)
 collection.scheduler = scheduler
 
 

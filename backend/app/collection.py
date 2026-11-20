@@ -23,7 +23,7 @@ JOBS = {
 # What each reader can deliver, in plain words (shops.provides says what is switched on).
 READS = {
     "floraccess": ["price (net)", "stock quantity", "pot size", "grower", "available / sold out"],
-    "jtl": ["price", "available / sold out", "discount badges"],
+    "jtl": ["price", "available / sold out", "discount badges", "Bestseller + Newest order (demand)"],
     "shopify": ["price per pot size", "available / sold out"],
 }
 

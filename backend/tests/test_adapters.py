@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.adapters import floraccess, jtl, shopify
 from app.adapters.floraccess import FlorAccessAdapter
+from app.adapters.base import FetchError
 from app.adapters.jtl import JtlAdapter
 from app.adapters.shopify import ShopifyAdapter
 
@@ -76,11 +77,36 @@ def test_jtl_paging_stops_when_nothing_new():
     url = "https://uhlig-kakteen.de/Hoya-und-Dischidia"
     page = load("uhlig_hoya_p1.html.gz")
     fetch = fake_fetch({url: page, f"{url}_s2": page})
-    res = JtlAdapter({"category_url": url, "name_prefix": "hoya"}).collect(fetch)
+    res = JtlAdapter({"category_url": url, "name_prefix": "hoya", "ranks": False}).collect(fetch)
     assert len(fetch.calls) == 2
     assert res.expected_total == 309
     assert len(res.offers) == 19  # 32 boxes minus 13 Dischidia
     assert all(o.name.lower().startswith("hoya") for o in res.offers)
+
+
+def test_jtl_sort_orders_become_ranks():
+    url = "https://uhlig-kakteen.de/Hoya-und-Dischidia"
+    page = load("uhlig_hoya_p1.html.gz")
+    pages = {url: page, f"{url}_s2": page}
+    for sort in (11, 6):
+        pages[f"{url}?Sortierung={sort}"] = page
+        pages[f"{url}_s2?Sortierung={sort}"] = page
+    res = JtlAdapter({"category_url": url, "name_prefix": "hoya"}).collect(fake_fetch(pages))
+    hoya_order = [o.item_key for o in res.offers]
+    assert res.ranks["bestseller"] == hoya_order and res.ranks["newest"] == hoya_order
+
+
+def test_jtl_missing_sort_page_keeps_offers():
+    url = "https://uhlig-kakteen.de/Hoya-und-Dischidia"
+    page = load("uhlig_hoya_p1.html.gz")
+
+    def fetch(u):
+        if "Sortierung" in u:
+            raise FetchError("simulated")
+        return page
+
+    res = JtlAdapter({"category_url": url, "name_prefix": "hoya"}).collect(fetch)
+    assert len(res.offers) == 19 and res.ranks == {} and any("bestseller order" in e for e in res.errors)
 
 
 # --- FlorAccess ---

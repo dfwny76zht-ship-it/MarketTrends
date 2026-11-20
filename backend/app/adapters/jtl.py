@@ -8,6 +8,7 @@ from selectolax.parser import HTMLParser, Node
 
 from .base import (
     Adapter,
+    FetchError,
     CollectResult,
     Offer,
     availability_from_schema,
@@ -46,7 +47,34 @@ class JtlAdapter(Adapter):
                     res.offers.append(item)
             if new == 0 or (total and len(all_ids) >= total):
                 break
+        hoya = {o.item_key for o in res.offers}
+        for name, sort in RANK_SORTS:
+            if self.config.get("ranks") is False:
+                break
+            try:
+                order = _ranked(fetch, url, sort, len(all_ids))
+            except FetchError as exc:
+                res.errors.append(f"{name} order: {exc}")
+                continue
+            res.ranks[name] = [k for k in order if k in hoya]
         return res
+
+
+# The shop's own sort orders, read as a demand signal (JTL "Sortierung" values).
+RANK_SORTS = (("bestseller", 11), ("newest", 6))
+
+
+def _ranked(fetch, url: str, sort: int, expected: int) -> list[str]:
+    """Item ids in the order the shop lists them when sorted by `sort`, over all pages."""
+    order: list[str] = []
+    for page in range(1, 41):
+        html = fetch(f"{url}?Sortierung={sort}" if page == 1 else f"{url}_s{page}?Sortierung={sort}")
+        items, _ = parse_category(html)
+        new = [i.item_key for i in items if not isinstance(i, str) and i.item_key not in order]
+        order += new
+        if not new or len(order) >= expected:
+            break
+    return order
 
 
 def parse_category(html: str) -> tuple[list, int | None]:
