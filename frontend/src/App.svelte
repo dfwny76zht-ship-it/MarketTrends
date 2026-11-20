@@ -2,6 +2,7 @@
   import { api } from './lib/api.js';
   import Login from './pages/Login.svelte';
   import Shops from './pages/Shops.svelte';
+  import Collection from './pages/Collection.svelte';
   import Assign from './pages/Assign.svelte';
   import Species from './pages/Species.svelte';
   import Overview from './pages/Overview.svelte';
@@ -36,7 +37,7 @@
 
   function pageFromHash() {
     const p = location.hash.replace(/^#\/?/, '').split('/')[0];
-    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'shops', 'assign', 'species', 'groupings', 'reports'].includes(p) ? p : 'overview';
+    return ['overview', 'taxon', 'trends', 'events', 'scatter', 'watchlist', 'shops', 'collection', 'assign', 'species', 'groupings', 'reports'].includes(p) ? p : 'overview';
   }
 
   api('/me', { allow401: true })
@@ -92,6 +93,7 @@
         <a href="#/watchlist" class:active={page === 'watchlist'}>Watchlist</a>
         <span class="sep"></span>
         <a href="#/shops" class:active={page === 'shops'}>Shops</a>
+        <a href="#/collection" class:active={page === 'collection'}>Collection</a>
         <a href="#/assign" class:active={page === 'assign'}>
           To assign{#if openCount}<span class="count">{openCount}</span>{/if}
         </a>
@@ -116,6 +118,8 @@
         <Watchlist />
       {:else if page === 'shops'}
         <Shops />
+      {:else if page === 'collection'}
+        <Collection />
       {:else if page === 'assign'}
         <Assign onchange={refreshCount} />
       {:else if page === 'species'}
