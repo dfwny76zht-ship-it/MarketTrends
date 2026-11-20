@@ -1,4 +1,5 @@
 """Adapters against stored shop pages (saved 2026-11-18). Run: pytest backend/tests"""
+import json
 
 import gzip
 from decimal import Decimal
@@ -174,3 +175,31 @@ def test_floraccess_product_without_machine_readable_block():
     assert offer.price == Decimal("6.03")
     assert {"unit": "layer", "layers": 1, "min_qty": 36, "price": "6.03"} in offer.tier_prices
     assert offer.raw["from"] == "page text"
+
+
+# --- Shopify via the normal collection pages (Jungle Leaves) ---
+
+def _jl_page(products):
+    meta = {"products": [{"id": i, "handle": h, "variants": vs} for i, (h, vs, _) in enumerate(products)]}
+    cards = "".join(
+        f'<product-card class="x"><span class="badge {"out-of-stock" if sold else ""}">x</span>'
+        f'<input data-product-handle="{h}"><img src="//shop/cdn/{h}.jpg?v=1&width=20"></product-card>'
+        for h, _, sold in products)
+    return f"<script>var meta = {json.dumps(meta)};\n</script>{cards}"
+
+
+def test_shopify_html_offers_and_ranks():
+    from app.adapters.shopify_html import ShopifyHtmlAdapter
+    base = "https://www.jungle-leaves.de"
+    lisa = ("lisa", [{"id": 11, "price": 899, "name": "Hoya australis 'Lisa' - 8cm Rundtopf", "public_title": "8cm Rundtopf", "sku": "H9-8"},
+                     {"id": 12, "price": 1499, "name": "Hoya australis 'Lisa' - 12cm Rundtopf", "public_title": "12cm Rundtopf", "sku": "H9-12"}], False)
+    retusa = ("retusa", [{"id": 21, "price": 2999, "name": "Hoya retusa", "public_title": None, "sku": "H7"}], True)
+    disch = ("disch", [{"id": 31, "price": 1299, "name": "Dischidia major", "public_title": None, "sku": "D1"}], True)
+    u = f"{base}/collections/hoya"
+    pages = {f"{u}?page=1": _jl_page([lisa, retusa, disch]), f"{u}?page=2": _jl_page([]),
+             f"{u}?page=1&sort_by=best-selling": _jl_page([retusa, lisa]), f"{u}?page=2&sort_by=best-selling": _jl_page([]),
+             f"{u}?page=1&sort_by=created-descending": _jl_page([lisa, retusa]), f"{u}?page=2&sort_by=created-descending": _jl_page([])}
+    res = ShopifyHtmlAdapter({"base": base, "collection": "hoya"}).collect(fake_fetch(pages))
+    got = {(o.item_key, float(o.price), o.availability, o.pot_size) for o in res.offers}
+    assert got == {("11", 8.99, "available", "8 cm"), ("12", 14.99, "available", "12 cm"), ("21", 29.99, "sold_out", None)}
+    assert res.ranks["bestseller"] == [["21"], ["11", "12"]]

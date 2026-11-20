@@ -2,9 +2,10 @@ from .base import Adapter, Blocked, CollectResult, Disallowed, FetchError, Offer
 from .floraccess import FlorAccessAdapter
 from .jtl import JtlAdapter
 from .shopify import ShopifyAdapter
+from .shopify_html import ShopifyHtmlAdapter
 
 REGISTRY: dict[str, type[Adapter]] = {
-    a.key: a for a in (ShopifyAdapter, JtlAdapter, FlorAccessAdapter)
+    a.key: a for a in (ShopifyAdapter, ShopifyHtmlAdapter, JtlAdapter, FlorAccessAdapter)
 }
 
 __all__ = ["REGISTRY", "Adapter", "Blocked", "CollectResult", "Disallowed", "FetchError", "Offer"]

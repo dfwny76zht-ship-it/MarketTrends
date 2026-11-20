@@ -64,8 +64,9 @@ class CollectResult:
     errors: list[str] = field(default_factory=list)
     expected_total: int | None = None
     complete: bool = True
-    # The shop's own sort orders (demand signal): list name -> item_keys, best first.
-    ranks: dict[str, list[str]] = field(default_factory=dict)
+    # The shop's own sort orders (demand signal): list name -> item_keys best first; an entry may be a
+    # list of keys that share one place (the sizes of one product).
+    ranks: dict[str, list] = field(default_factory=dict)
 
 
 class Adapter:

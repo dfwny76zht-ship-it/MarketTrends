@@ -227,14 +227,17 @@ def _store_ranks(shop_id: int, run_id: int, ranks: dict, now: datetime | None = 
     with pool.connection() as conn:
         ids = {r["item_key"]: r["id"] for r in conn.execute(
             "SELECT id, item_key FROM listings WHERE shop_id = %s", (shop_id,))}
-        for name, keys in (ranks or {}).items():
-            keys = [k for k in keys if k in ids]
-            for pos, k in enumerate(keys, 1):
-                conn.execute(
-                    "INSERT INTO listing_ranks (listing_id, run_id, observed_at, list, position, list_size)"
-                    " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
-                    (ids[k], run_id, now, name, pos, len(keys)))
-                n += 1
+        for name, entries in (ranks or {}).items():
+            # an entry is one item key, or a list of keys sharing one place (sizes of one product)
+            groups = [[k for k in (e if isinstance(e, list) else [e]) if k in ids] for e in entries]
+            groups = [g for g in groups if g]
+            for pos, group in enumerate(groups, 1):
+                for k in group:
+                    conn.execute(
+                        "INSERT INTO listing_ranks (listing_id, run_id, observed_at, list, position, list_size)"
+                        " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                        (ids[k], run_id, now, name, pos, len(groups)))
+                    n += 1
     return n
 
 

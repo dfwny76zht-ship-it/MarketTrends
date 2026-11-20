@@ -28,7 +28,7 @@
     const m = Math.round((Date.now() - new Date(iso)) / 60000);
     return m < 2 ? 'just now' : m < 120 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
   };
-  const KIND = { collect: 'Collection', robots: 'robots.txt check' };
+  const KIND = { collect: 'Collection', robots: 'robots.txt check', details: 'Product details' };
   const PAGE_KIND = { category: 'category page', offer: 'grower offer page', product: 'product page' };
   const nightly = $derived(data?.jobs.find((j) => j.id === 'nightly')?.next);
 

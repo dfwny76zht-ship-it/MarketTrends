@@ -18,6 +18,7 @@ JOBS = {
     "nightly": "Night run: shops collected by Hetzner, robots.txt checks",
     "images": "Photos of new offers",
     "pi_overdue": "Alarm if the Pi has not delivered its shops",
+    "details": "Product details, weekly: pot size, article no., discount, delivery time, bought together (Ben's Jungle)",
     "weekly_summary": "Weekly summary to the phone (ntfy)",
 }
 # What each reader can deliver, in plain words (shops.provides says what is switched on).
@@ -25,6 +26,7 @@ READS = {
     "floraccess": ["price (net)", "stock quantity", "pot size", "grower", "available / sold out"],
     "jtl": ["price", "available / sold out", "discount badges", "Bestseller + Newest order (demand)"],
     "shopify": ["price per pot size", "available / sold out"],
+    "shopify_html": ["price per pot size", "available / sold out (per product)", "Bestseller + Newest order (demand)"],
 }
 
 

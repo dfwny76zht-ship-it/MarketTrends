@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import analytics, archive, auth, collect, collection, collector, demand, config, groupings, images, markus, migrate, shops, taxa, taxonomy, trends
+from . import analytics, archive, auth, collect, collection, collector, demand, details, config, groupings, images, markus, migrate, shops, taxa, taxonomy, trends
 from .db import pool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -26,6 +26,9 @@ scheduler.add_job(images.nightly, "cron", hour=4, minute=45, id="images", coales
 scheduler.add_job(
     collector.check_overdue, "cron", hour=6, minute=0, id="pi_overdue", coalesce=True, misfire_grace_time=3600,
 )
+# Product pages once a week (pot size, article no., discount, delivery time, bought together).
+scheduler.add_job(details.weekly, "cron", day_of_week="sun", hour=6, minute=30, id="details", coalesce=True,
+                  misfire_grace_time=6 * 3600)
 scheduler.add_job(
     trends.weekly_summary,
     "cron",
