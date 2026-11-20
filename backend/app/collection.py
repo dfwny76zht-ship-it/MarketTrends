@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends
 
 from . import archive
@@ -36,7 +38,10 @@ def overview():
     if scheduler:
         for job_id, what in JOBS.items():
             j = scheduler.get_job(job_id)
-            jobs.append({"id": job_id, "what": what, "next": j.next_run_time.isoformat() if j and j.next_run_time else None})
+            nxt = getattr(j, "next_run_time", None) if j else None
+            if j and nxt is None:  # scheduler not started in this process: work it out from the trigger
+                nxt = j.trigger.get_next_fire_time(None, datetime.now(timezone.utc))
+            jobs.append({"id": job_id, "what": what, "next": nxt.isoformat() if nxt else None})
     with pool.connection() as conn:
         pi = conn.execute("SELECT last_seen FROM collectors WHERE name = 'pi'").fetchone()
         shops = conn.execute(
